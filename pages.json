@@ -1,17 +1,64 @@
 {
-	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
-		{
-			"path": "pages/index/index",
-			"style": {
-				"navigationBarTitleText": "uni-app"
-			}
-		}
-	],
-	"globalStyle": {
-		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "uni-app",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
-	},
-	"uniIdRouter": {}
+  "pages": [
+    {
+      "path": "pages/auth/auth",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/timer/timer",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/todo/todo",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/log/log",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/settings/settings",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#8B949E",
+    "selectedColor": "#2F9F5B",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/timer/timer",
+        "text": "\u756a\u8304\u949f"
+      },
+      {
+        "pagePath": "pages/todo/todo",
+        "text": "\u5de5\u4f5c\u5f85\u529e"
+      },
+      {
+        "pagePath": "pages/log/log",
+        "text": "\u5de5\u4f5c\u65e5\u5fd7"
+      },
+      {
+        "pagePath": "pages/settings/settings",
+        "text": "\u6211\u7684"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#F7FBF7",
+    "backgroundColor": "#F4F8F4"
+  },
+  "uniIdRouter": {}
 }
