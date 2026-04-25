@@ -1,33 +1,37 @@
 <template>
   <view class="page" :style="themeVars">
     <view class="hero">
-      <view>
-        <text class="eyebrow">我的</text>
+      <text class="eyebrow">我的</text>
+      <view class="account-row">
         <text class="headline">{{ currentUsername || "未登录" }}</text>
-      </view>
-      <view class="account-actions">
-        <text class="action-link" @tap="logout">退出</text>
-        <text class="action-link danger" @tap="deleteAccount">注销</text>
+        <view class="account-actions">
+          <button class="mini-btn" @tap="logout">退出</button>
+          <button class="mini-btn danger" @tap="deleteAccount">注销</button>
+        </view>
       </view>
     </view>
 
     <view class="card">
-      <text class="group-title">计时设置</text>
+      <text class="group-title">番茄钟设置</text>
       <view class="field-row">
         <text class="field-label">专注时长</text>
-        <input class="number-input" type="number" v-model="form.focusMinutes" @blur="normalizeNumber('focusMinutes', 25, 1, 180)" />
+        <view class="stepper">
+          <text class="step-btn" :class="{ disabled: !canAdjustFocus(-1) }" @tap="adjustFocus(-1)">-</text>
+          <text class="step-value">{{ form.focusMinutes }} 分钟</text>
+          <text class="step-btn" :class="{ disabled: !canAdjustFocus(1) }" @tap="adjustFocus(1)">+</text>
+        </view>
       </view>
       <view class="field-row">
-        <text class="field-label">短休息时长</text>
-        <input class="number-input" type="number" v-model="form.shortBreakMinutes" @blur="normalizeNumber('shortBreakMinutes', 5, 1, 60)" />
-      </view>
-      <view class="field-row">
-        <text class="field-label">长休息时长</text>
-        <input class="number-input" type="number" v-model="form.longBreakMinutes" @blur="normalizeNumber('longBreakMinutes', 15, 1, 120)" />
+        <text class="field-label">休息时长</text>
+        <view class="stepper">
+          <text class="step-btn" :class="{ disabled: !canAdjustBreak(-1) }" @tap="adjustBreak(-1)">-</text>
+          <text class="step-value">{{ form.breakMinutes }} 分钟</text>
+          <text class="step-btn" :class="{ disabled: !canAdjustBreak(1) }" @tap="adjustBreak(1)">+</text>
+        </view>
       </view>
       <view class="field-row last">
-        <text class="field-label">自动进入下一个阶段</text>
-        <switch :checked="form.autoNextStage" color="#2f9f5b" @change="onSwitch('autoNextStage', $event)" />
+        <text class="field-label">自动进入下一个番茄钟</text>
+        <switch :checked="form.autoNextStage" :color="themeVars['--accent']" @change="onSwitch('autoNextStage', $event)" />
       </view>
     </view>
 
@@ -37,19 +41,15 @@
         <text class="field-label">每日目标番茄数</text>
         <input class="number-input" type="number" v-model="form.dailyGoal" @blur="normalizeNumber('dailyGoal', 8, 1, 99)" />
       </view>
-      <view class="field-row">
-        <text class="field-label">结束铃声</text>
-        <switch :checked="form.finishBellEnabled" color="#2f9f5b" @change="onSwitch('finishBellEnabled', $event)" />
-      </view>
       <view class="field-row last">
-        <text class="field-label">通知提醒</text>
-        <switch :checked="form.notificationEnabled" color="#2f9f5b" @change="onSwitch('notificationEnabled', $event)" />
+        <text class="field-label">结束铃声</text>
+        <switch :checked="form.finishBellEnabled" :color="themeVars['--accent']" @change="onSwitch('finishBellEnabled', $event)" />
       </view>
     </view>
 
     <view class="card">
       <text class="group-title">外观</text>
-      <text class="group-desc">选择你更喜欢的情绪色调，页面会立即切换。</text>
+      <text class="group-desc">选择你喜欢的风格，页面会立即切换。</text>
       <view class="scheme-grid">
         <view v-for="item in colorSchemes" :key="item.value" class="scheme-card" :class="{ active: form.colorScheme === item.value }" @tap="selectScheme(item.value)">
           <view class="scheme-swatches">
@@ -63,9 +63,18 @@
 
       <view class="font-row">
         <text class="field-label">字体大小</text>
-        <text class="font-value">{{ form.fontScale }}%</text>
       </view>
-      <slider :value="form.fontScale" :min="85" :max="120" :step="5" activeColor="#2f9f5b" @change="onFontScaleChange" />
+      <view class="font-options">
+        <text
+          v-for="item in fontScaleOptions"
+          :key="item.value"
+          class="font-pill"
+          :class="{ active: form.fontScale === item.value }"
+          @tap="selectFontScale(item.value)"
+        >
+          {{ item.label }}
+        </text>
+      </view>
     </view>
   </view>
 </template>
@@ -76,25 +85,36 @@ import { onShow } from "@dcloudio/uni-app";
 import { deleteCurrentUser, getCurrentUser, logoutUser } from "../../utils/auth";
 import { clearCurrentUserScopedData, getUserStorage, setUserStorage } from "../../utils/user-storage";
 import { ensureLogin } from "../../utils/guard";
-import { getAppSettings, getThemeVars } from "../../utils/theme";
+import { cacheAppearanceSettings, getAppSettings, getThemeVars } from "../../utils/theme";
 
 const SETTINGS_KEY = "timerSettings";
+const FOCUS_MIN = 5;
+const FOCUS_MAX = 60;
+const FOCUS_STEP = 5;
+const BREAK_MIN = 1;
+const BREAK_MAX = 10;
+const BREAK_STEP = 1;
+
 const DEFAULT_FORM = {
-  focusMinutes: "25",
-  shortBreakMinutes: "5",
-  longBreakMinutes: "15",
+  focusMinutes: 25,
+  breakMinutes: 5,
   autoNextStage: false,
   dailyGoal: "8",
   finishBellEnabled: true,
-  notificationEnabled: true,
-  colorScheme: "focusGreen",
-  fontScale: 100,
+  colorScheme: "calmBlue",
+  fontScale: 110,
 };
 
 const colorSchemes = [
+  { label: "静谧蓝", value: "calmBlue", colors: ["#2c76c9", "#dcecff", "#eef6ff"] },
   { label: "专注绿", value: "focusGreen", colors: ["#2f9f5b", "#dff5e6", "#f1fbf5"] },
   { label: "活力橙", value: "energyOrange", colors: ["#ee7b2d", "#ffe7d6", "#fff4ea"] },
-  { label: "静谧蓝", value: "calmBlue", colors: ["#2c76c9", "#dcecff", "#eef6ff"] },
+];
+
+const fontScaleOptions = [
+  { label: "小", value: 100 },
+  { label: "中", value: 110 },
+  { label: "大", value: 120 },
 ];
 
 const form = ref({ ...DEFAULT_FORM });
@@ -103,40 +123,65 @@ const themeVars = ref(getThemeVars(getAppSettings()));
 
 function loadSettings() {
   const saved = getUserStorage(SETTINGS_KEY, {}) || {};
+  const legacyBreak = Number(saved.shortBreakMinutes ?? saved.longBreakMinutes ?? DEFAULT_FORM.breakMinutes);
   form.value = {
     ...DEFAULT_FORM,
     ...saved,
-    focusMinutes: String(saved.focusMinutes ?? DEFAULT_FORM.focusMinutes),
-    shortBreakMinutes: String(saved.shortBreakMinutes ?? DEFAULT_FORM.shortBreakMinutes),
-    longBreakMinutes: String(saved.longBreakMinutes ?? DEFAULT_FORM.longBreakMinutes),
-    dailyGoal: String(saved.dailyGoal ?? DEFAULT_FORM.dailyGoal),
-    fontScale: Number(saved.fontScale ?? DEFAULT_FORM.fontScale),
+    focusMinutes: clampNumber(saved.focusMinutes, DEFAULT_FORM.focusMinutes, FOCUS_MIN, FOCUS_MAX),
+    breakMinutes: clampNumber(saved.breakMinutes, legacyBreak, BREAK_MIN, BREAK_MAX),
+    dailyGoal: String(clampNumber(saved.dailyGoal, DEFAULT_FORM.dailyGoal, 1, 99)),
+    colorScheme: saved.colorScheme || DEFAULT_FORM.colorScheme,
+    fontScale: normalizeFontScale(saved.fontScale),
   };
   themeVars.value = getThemeVars(form.value);
+  cacheAppearanceSettings(form.value);
 }
 
 function persistSettings() {
   const payload = {
-    focusMinutes: Number(form.value.focusMinutes || 25),
-    shortBreakMinutes: Number(form.value.shortBreakMinutes || 5),
-    longBreakMinutes: Number(form.value.longBreakMinutes || 15),
+    focusMinutes: clampNumber(form.value.focusMinutes, DEFAULT_FORM.focusMinutes, FOCUS_MIN, FOCUS_MAX),
+    breakMinutes: clampNumber(form.value.breakMinutes, DEFAULT_FORM.breakMinutes, BREAK_MIN, BREAK_MAX),
+    shortBreakMinutes: clampNumber(form.value.breakMinutes, DEFAULT_FORM.breakMinutes, BREAK_MIN, BREAK_MAX),
+    longBreakMinutes: clampNumber(form.value.breakMinutes, DEFAULT_FORM.breakMinutes, BREAK_MIN, BREAK_MAX),
     autoNextStage: Boolean(form.value.autoNextStage),
-    dailyGoal: Number(form.value.dailyGoal || 8),
+    dailyGoal: clampNumber(form.value.dailyGoal, DEFAULT_FORM.dailyGoal, 1, 99),
     finishBellEnabled: Boolean(form.value.finishBellEnabled),
-    notificationEnabled: Boolean(form.value.notificationEnabled),
-    colorScheme: form.value.colorScheme || "focusGreen",
-    fontScale: Number(form.value.fontScale || 100),
+    colorScheme: form.value.colorScheme || DEFAULT_FORM.colorScheme,
+    fontScale: normalizeFontScale(form.value.fontScale),
   };
+  form.value.focusMinutes = payload.focusMinutes;
+  form.value.breakMinutes = payload.breakMinutes;
+  form.value.dailyGoal = String(payload.dailyGoal);
+  form.value.fontScale = payload.fontScale;
   setUserStorage(SETTINGS_KEY, payload);
+  cacheAppearanceSettings(payload);
   themeVars.value = getThemeVars(payload);
 }
 
 function normalizeNumber(field, fallback, min, max) {
-  let safe = Number(form.value[field]);
-  safe = Number.isFinite(safe) ? safe : fallback;
-  if (safe < min) safe = min;
-  if (safe > max) safe = max;
-  form.value[field] = String(Math.floor(safe));
+  form.value[field] = String(clampNumber(form.value[field], fallback, min, max));
+  persistSettings();
+}
+
+function canAdjustFocus(direction) {
+  const next = Number(form.value.focusMinutes || 0) + direction * FOCUS_STEP;
+  return next >= FOCUS_MIN && next <= FOCUS_MAX;
+}
+
+function canAdjustBreak(direction) {
+  const next = Number(form.value.breakMinutes || 0) + direction * BREAK_STEP;
+  return next >= BREAK_MIN && next <= BREAK_MAX;
+}
+
+function adjustFocus(direction) {
+  if (!canAdjustFocus(direction)) return;
+  form.value.focusMinutes = Number(form.value.focusMinutes || 0) + direction * FOCUS_STEP;
+  persistSettings();
+}
+
+function adjustBreak(direction) {
+  if (!canAdjustBreak(direction)) return;
+  form.value.breakMinutes = Number(form.value.breakMinutes || 0) + direction * BREAK_STEP;
   persistSettings();
 }
 
@@ -150,8 +195,8 @@ function selectScheme(scheme) {
   persistSettings();
 }
 
-function onFontScaleChange(event) {
-  form.value.fontScale = Number(event?.detail?.value ?? 100);
+function selectFontScale(value) {
+  form.value.fontScale = normalizeFontScale(value);
   persistSettings();
 }
 
@@ -178,6 +223,21 @@ function deleteAccount() {
   });
 }
 
+function normalizeFontScale(raw) {
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return 110;
+  if (num <= 105) return 100;
+  if (num >= 115) return 120;
+  return 110;
+}
+
+function clampNumber(raw, fallback, min, max) {
+  const base = Number.isFinite(Number(raw)) ? Number(raw) : Number(fallback);
+  if (base < min) return min;
+  if (base > max) return max;
+  return Math.floor(base);
+}
+
 onShow(() => {
   if (!ensureLogin()) return;
   currentUsername.value = getCurrentUser()?.username || "";
@@ -202,9 +262,27 @@ onShow(() => {
 .hero {
   border-radius: 34rpx;
   padding: 24rpx;
+}
+
+.account-row,
+.field-row,
+.font-row,
+.stepper,
+.font-options,
+.scheme-swatches {
   display: flex;
+  align-items: center;
+}
+
+.account-row,
+.field-row,
+.font-row {
   justify-content: space-between;
-  align-items: flex-start;
+}
+
+.account-row {
+  margin-top: 12rpx;
+  gap: 18rpx;
 }
 
 .eyebrow {
@@ -214,8 +292,8 @@ onShow(() => {
 }
 
 .headline {
-  display: block;
-  margin-top: 10rpx;
+  flex: 1;
+  min-width: 0;
   font-size: calc(40rpx * var(--font-scale));
   font-weight: 800;
   color: var(--text-main);
@@ -223,17 +301,28 @@ onShow(() => {
 
 .account-actions {
   display: flex;
-  gap: 18rpx;
+  gap: 10rpx;
+  flex-shrink: 0;
 }
 
-.action-link {
-  font-size: calc(24rpx * var(--font-scale));
-  font-weight: 700;
+.mini-btn {
+  height: 62rpx;
+  line-height: 62rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: var(--accent-soft);
   color: var(--accent-deep);
+  font-size: calc(22rpx * var(--font-scale));
+  font-weight: 700;
 }
 
-.action-link.danger {
-  color: #c84e3d;
+.mini-btn.danger {
+  background: #ffe4df;
+  color: #be4535;
+}
+
+.mini-btn::after {
+  border: none;
 }
 
 .card {
@@ -259,9 +348,6 @@ onShow(() => {
 
 .field-row,
 .font-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 18rpx 0;
   border-bottom: 1rpx solid var(--border-soft);
 }
@@ -270,10 +356,37 @@ onShow(() => {
   border-bottom: none;
 }
 
-.field-label,
-.font-value {
+.field-label {
   font-size: calc(26rpx * var(--font-scale));
   color: var(--text-main);
+}
+
+.stepper {
+  gap: 14rpx;
+}
+
+.step-btn {
+  width: 50rpx;
+  height: 50rpx;
+  border-radius: 14rpx;
+  text-align: center;
+  line-height: 50rpx;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: calc(30rpx * var(--font-scale));
+  font-weight: 700;
+}
+
+.step-btn.disabled {
+  opacity: 0.35;
+}
+
+.step-value {
+  min-width: 130rpx;
+  text-align: center;
+  font-size: calc(24rpx * var(--font-scale));
+  color: var(--text-main);
+  font-weight: 700;
 }
 
 .number-input {
@@ -303,7 +416,6 @@ onShow(() => {
 }
 
 .scheme-swatches {
-  display: flex;
   gap: 8rpx;
 }
 
@@ -319,5 +431,26 @@ onShow(() => {
   font-size: calc(22rpx * var(--font-scale));
   color: var(--text-main);
   font-weight: 700;
+}
+
+.font-options {
+  margin-top: 16rpx;
+  gap: 12rpx;
+}
+
+.font-pill {
+  flex: 1;
+  padding: 16rpx 0;
+  text-align: center;
+  border-radius: 18rpx;
+  background: #edf1ef;
+  color: var(--text-sub);
+  font-size: calc(24rpx * var(--font-scale));
+  font-weight: 700;
+}
+
+.font-pill.active {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 </style>

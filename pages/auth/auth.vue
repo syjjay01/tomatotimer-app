@@ -1,5 +1,5 @@
 <template>
-  <view class="page" :style="heroStyle">
+  <view class="page" :style="themeVars">
     <view class="ambient ambient-a"></view>
     <view class="ambient ambient-b"></view>
 
@@ -42,20 +42,16 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { getCurrentUser, loginUser, registerUser, userExists } from "../../utils/auth";
+import { getAppSettings, getThemeVars } from "../../utils/theme";
 
 const tab = ref("login");
 const username = ref("");
 const password = ref("");
 const confirmPassword = ref("");
-
-const heroStyle = computed(() => ({
-  "--accent": tab.value === "register" ? "#ee7b2d" : "#2f9f5b",
-  "--accent-soft": tab.value === "register" ? "#ffe7d6" : "#dff5e6",
-  "--accent-deep": tab.value === "register" ? "#c55c11" : "#1f7c45",
-}));
+const themeVars = ref(getThemeVars(getAppSettings()));
 
 function switchTab(nextTab) {
   tab.value = nextTab;
@@ -108,7 +104,9 @@ function submit() {
 onShow(() => {
   if (getCurrentUser()) {
     uni.switchTab({ url: "/pages/timer/timer" });
+    return;
   }
+  themeVars.value = getThemeVars(getAppSettings());
 });
 </script>
 
@@ -119,7 +117,7 @@ onShow(() => {
   box-sizing: border-box;
   background:
     radial-gradient(circle at top left, var(--accent-soft) 0, transparent 34%),
-    linear-gradient(160deg, #f5fbf6 0%, #f4efe8 100%);
+    linear-gradient(160deg, var(--bg-start) 0%, var(--bg-end) 100%);
   position: relative;
   overflow: hidden;
 }
@@ -155,34 +153,34 @@ onShow(() => {
 
 .brand {
   display: block;
-  font-size: 76rpx;
+  font-size: calc(76rpx * var(--font-scale));
   line-height: 1;
   font-weight: 800;
-  color: #163126;
+  color: var(--text-main);
 }
 
 .headline {
   display: block;
   margin-top: 24rpx;
-  font-size: 34rpx;
+  font-size: calc(34rpx * var(--font-scale));
   line-height: 1.45;
   font-weight: 700;
-  color: #22372d;
+  color: var(--text-main);
 }
 
 .subline {
   display: block;
   margin-top: 14rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
   line-height: 1.6;
-  color: #60756b;
+  color: var(--text-sub);
 }
 
 .panel {
   position: relative;
   z-index: 1;
   margin-top: 42rpx;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--panel);
   backdrop-filter: blur(18rpx);
   border-radius: 32rpx;
   padding: 24rpx;
@@ -192,7 +190,7 @@ onShow(() => {
 .tabs {
   display: flex;
   padding: 8rpx;
-  background: #eff4f0;
+  background: var(--panel-soft);
   border-radius: 999rpx;
 }
 
@@ -201,15 +199,15 @@ onShow(() => {
   text-align: center;
   padding: 18rpx 0;
   border-radius: 999rpx;
-  color: #708277;
-  font-size: 28rpx;
+  color: var(--text-sub);
+  font-size: calc(28rpx * var(--font-scale));
   font-weight: 600;
 }
 
 .tab.active {
-  background: #ffffff;
+  background: var(--panel);
   color: var(--accent-deep);
-  box-shadow: 0 8rpx 20rpx rgba(31, 124, 69, 0.12);
+  box-shadow: 0 8rpx 20rpx rgba(23, 58, 90, 0.14);
 }
 
 .field {
@@ -219,8 +217,8 @@ onShow(() => {
 .field-label {
   display: block;
   margin-bottom: 10rpx;
-  font-size: 24rpx;
-  color: #668072;
+  font-size: calc(24rpx * var(--font-scale));
+  color: var(--text-sub);
 }
 
 .input {
@@ -229,10 +227,10 @@ onShow(() => {
   padding: 0 24rpx;
   box-sizing: border-box;
   border-radius: 22rpx;
-  background: #f7faf7;
-  border: 1rpx solid #e1ebe3;
-  color: #20342b;
-  font-size: 28rpx;
+  background: var(--panel-soft);
+  border: 1rpx solid var(--border-soft);
+  color: var(--text-main);
+  font-size: calc(28rpx * var(--font-scale));
 }
 
 .primary-btn {
@@ -242,7 +240,7 @@ onShow(() => {
   color: #ffffff;
   height: 92rpx;
   line-height: 92rpx;
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   font-weight: 700;
 }
 
@@ -253,8 +251,8 @@ onShow(() => {
 .hint {
   display: block;
   margin-top: 16rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   line-height: 1.6;
-  color: #76867d;
+  color: var(--text-sub);
 }
 </style>

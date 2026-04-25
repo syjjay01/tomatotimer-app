@@ -1,8 +1,12 @@
 import { getUserStorage } from "./user-storage";
 
+const APPEARANCE_CACHE_KEY = "fgb:lastAppearance";
+
 const DEFAULT_SETTINGS = {
-  colorScheme: "focusGreen",
-  fontScale: 100,
+  colorScheme: "calmBlue",
+  fontScale: 110,
+  focusMinutes: 25,
+  breakMinutes: 5,
 };
 
 const PALETTES = {
@@ -45,11 +49,18 @@ const PALETTES = {
 };
 
 export function getAppSettings() {
+  const cachedAppearance = uni.getStorageSync(APPEARANCE_CACHE_KEY) || {};
   const saved = getUserStorage("timerSettings", {}) || {};
+  const rawFontScale = Number(saved.fontScale ?? cachedAppearance.fontScale ?? DEFAULT_SETTINGS.fontScale);
+  const fallbackBreak = Number(saved.shortBreakMinutes ?? saved.longBreakMinutes ?? DEFAULT_SETTINGS.breakMinutes);
   return {
     ...DEFAULT_SETTINGS,
+    ...(typeof cachedAppearance === "object" ? cachedAppearance : {}),
     ...saved,
-    fontScale: Number(saved.fontScale ?? DEFAULT_SETTINGS.fontScale),
+    colorScheme: saved.colorScheme || cachedAppearance.colorScheme || DEFAULT_SETTINGS.colorScheme,
+    fontScale: normalizeFontScale(rawFontScale),
+    focusMinutes: clampNumber(saved.focusMinutes, DEFAULT_SETTINGS.focusMinutes, 5, 60),
+    breakMinutes: clampNumber(saved.breakMinutes, fallbackBreak, 1, 10),
   };
 }
 
@@ -58,7 +69,7 @@ export function getThemeVars(settings = {}) {
     ...DEFAULT_SETTINGS,
     ...settings,
   };
-  const palette = PALETTES[merged.colorScheme] || PALETTES.focusGreen;
+  const palette = PALETTES[merged.colorScheme] || PALETTES.calmBlue;
   return {
     "--accent": palette.accent,
     "--accent-deep": palette.accentDeep,
@@ -70,12 +81,43 @@ export function getThemeVars(settings = {}) {
     "--border-soft": palette.border,
     "--bg-start": palette.bgStart,
     "--bg-end": palette.bgEnd,
-    "--font-scale": String(Math.max(0.85, Math.min(1.2, merged.fontScale / 100))),
+    "--font-scale": String(normalizeFontScale(merged.fontScale) / 100),
   };
 }
 
 export function getPaletteLabel(colorScheme) {
-  if (colorScheme === "energyOrange") return "活力橙";
-  if (colorScheme === "calmBlue") return "静谧蓝";
-  return "专注绿";
+  if (colorScheme === "energyOrange") return "\u6d3b\u529b\u6a59";
+  if (colorScheme === "focusGreen") return "\u4e13\u6ce8\u7eff";
+  return "\u9759\u8c27\u84dd";
+}
+
+export function cacheAppearanceSettings(settings = {}) {
+  const payload = {
+    colorScheme: settings.colorScheme || DEFAULT_SETTINGS.colorScheme,
+    fontScale: normalizeFontScale(settings.fontScale),
+  };
+  uni.setStorageSync(APPEARANCE_CACHE_KEY, payload);
+}
+
+function normalizeFontScale(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_SETTINGS.fontScale;
+  const options = [100, 110, 120];
+  let closest = options[0];
+  let minDiff = Math.abs(num - closest);
+  options.forEach((item) => {
+    const diff = Math.abs(num - item);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = item;
+    }
+  });
+  return closest;
+}
+
+function clampNumber(raw, fallback, min, max) {
+  const base = Number.isFinite(Number(raw)) ? Number(raw) : Number(fallback);
+  if (base < min) return min;
+  if (base > max) return max;
+  return Math.floor(base);
 }

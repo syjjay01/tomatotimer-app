@@ -1,7 +1,7 @@
 {
     "name" : "番工宝",
     "appid" : "__UNI__464FE89",
-    "description" : "你的随身工作法宝。融合番茄钟、待办清单、工作日志与周报，支持独立专注或绑定任务。所有数据本地存储，隐私安全。可选AI会议摘要，轻松生成周报。科学管理时间，清晰记录痕迹，让效率触手可及。",
+    "description" : "你的随身工作法宝。融合番茄钟、待办清单、工作日志，支持独立专注或绑定任务。所有数据本地存储，隐私安全。科学管理时间，清晰记录痕迹，让效率触手可及。",
     "versionName" : "1.0.0",
     "versionCode" : "100",
     "transformPx" : false,
@@ -50,9 +50,9 @@
             "sdkConfigs" : {
                 "speech" : {
                     "baidu" : {
-                        "appid" : "",
-                        "apikey" : "",
-                        "secretkey" : ""
+                        "appid" : "123036602",
+                        "apikey" : "ewjgk8BwFbNrtjzALKzklLLu",
+                        "secretkey" : "iSE3cYh4NiRjuEIvVxE29z3HjrtpASwS"
                     }
                 }
             }

@@ -2,16 +2,21 @@
   <view class="page" :style="themeVars">
     <view class="hero-card">
       <view class="hero-top">
-        <view>
-          <text class="eyebrow">当前模式</text>
-          <text class="mode">{{ currentMode.label }}</text>
+        <view class="status-switch" @tap="toggleMode">
+          <text class="eyebrow">当前状态</text>
+          <view class="mode-row">
+            <text class="mode">{{ currentMode.label }}</text>
+            <text class="mode-emoji">{{ modeEmoji }}</text>
+          </view>
         </view>
-        <view class="cycle-pill">第 {{ cycleIndex }} 个番茄</view>
+        <view class="cycle-pill">第{{ cycleIndex }}个番茄</view>
       </view>
 
-      <view class="timer-ring">
-        <text class="timer-text">{{ formattedTime }}</text>
-        <text class="timer-sub">{{ selectedTaskName }}</text>
+      <view class="timer-ring" :style="ringStyle">
+        <view class="timer-core">
+          <text class="timer-text">{{ formattedTime }}</text>
+          <text v-if="timerSubText" class="timer-sub">{{ timerSubText }}</text>
+        </view>
       </view>
 
       <view class="action-row">
@@ -65,18 +70,17 @@ import { getAppSettings, getThemeVars } from "../../utils/theme";
 const STORAGE_KEYS = {
   todos: "todos",
   focusRecords: "focusRecords",
-  timerSettings: "timerSettings",
   timerSnapshot: "timerSnapshot",
 };
 
 const MODES = {
   focus: { key: "focus", label: "专注" },
-  shortBreak: { key: "shortBreak", label: "短休息" },
-  longBreak: { key: "longBreak", label: "长休息" },
+  break: { key: "break", label: "休息" },
 };
 
 const currentModeKey = ref("focus");
 const remainingSeconds = ref(25 * 60);
+const sessionTotalSeconds = ref(25 * 60);
 const isRunning = ref(false);
 const startTimestamp = ref(null);
 const expectedEndTimestamp = ref(null);
@@ -98,14 +102,35 @@ const selectedTaskName = computed(() => {
   if (!selectedTaskId.value) return "独立模式";
   return todos.value.find((item) => item.id === selectedTaskId.value)?.title || "独立模式";
 });
+const timerSubText = computed(() => (currentModeKey.value === "focus" ? selectedTaskName.value : ""));
+const modeEmoji = computed(() => (currentModeKey.value === "focus" ? "🍅" : "☕"));
+const countdownProgress = computed(() => {
+  const total = Math.max(1, Number(sessionTotalSeconds.value || getModeDuration(currentModeKey.value)));
+  return Math.max(0, Math.min(100, (remainingSeconds.value / total) * 100));
+});
+const ringStyle = computed(() => ({
+  "--ring-progress": `${Math.max(0, Math.min(360, countdownProgress.value * 3.6))}deg`,
+}));
+const toneAudioContext = ref(null);
+
+function normalizeModeKey(raw) {
+  if (raw === "shortBreak" || raw === "longBreak" || raw === "break") return "break";
+  return "focus";
+}
 
 function getModeDuration(modeKey) {
+  const normalized = normalizeModeKey(modeKey);
+  const breakMinutes = Number(timerSettings.value.breakMinutes ?? timerSettings.value.shortBreakMinutes ?? timerSettings.value.longBreakMinutes ?? 5);
   const map = {
     focus: Number(timerSettings.value.focusMinutes || 25) * 60,
-    shortBreak: Number(timerSettings.value.shortBreakMinutes || 5) * 60,
-    longBreak: Number(timerSettings.value.longBreakMinutes || 15) * 60,
+    break: breakMinutes * 60,
   };
-  return map[modeKey] || 25 * 60;
+  return map[normalized] || 25 * 60;
+}
+
+function toggleMode() {
+  const nextMode = currentModeKey.value === "focus" ? "break" : "focus";
+  applyMode(nextMode, { autoStart: false, persist: true });
 }
 
 function toggleTimer() {
@@ -114,12 +139,21 @@ function toggleTimer() {
     persistSnapshot();
     return;
   }
-  if (remainingSeconds.value <= 0) remainingSeconds.value = getModeDuration(currentModeKey.value);
+  startTimer();
+  persistSnapshot();
+}
+
+function startTimer() {
+  if (remainingSeconds.value <= 0) {
+    remainingSeconds.value = getModeDuration(currentModeKey.value);
+  }
+  if (!Number.isFinite(Number(sessionTotalSeconds.value)) || sessionTotalSeconds.value < remainingSeconds.value) {
+    sessionTotalSeconds.value = remainingSeconds.value;
+  }
   isRunning.value = true;
-  startTimestamp.value = Date.now();
+  if (!startTimestamp.value) startTimestamp.value = Date.now();
   expectedEndTimestamp.value = Date.now() + remainingSeconds.value * 1000;
   runTick();
-  persistSnapshot();
 }
 
 function pauseTimer() {
@@ -130,9 +164,25 @@ function pauseTimer() {
 
 function resetTimer() {
   pauseTimer();
-  remainingSeconds.value = getModeDuration(currentModeKey.value);
+  const duration = getModeDuration(currentModeKey.value);
+  remainingSeconds.value = duration;
+  sessionTotalSeconds.value = duration;
   startTimestamp.value = null;
   persistSnapshot();
+}
+
+function applyMode(modeKey, options = {}) {
+  const normalized = normalizeModeKey(modeKey);
+  const autoStart = options.autoStart === true;
+  const shouldPersist = options.persist !== false;
+  pauseTimer();
+  currentModeKey.value = normalized;
+  const duration = getModeDuration(normalized);
+  remainingSeconds.value = duration;
+  sessionTotalSeconds.value = duration;
+  startTimestamp.value = null;
+  if (autoStart) startTimer();
+  if (shouldPersist) persistSnapshot();
 }
 
 function runTick() {
@@ -142,7 +192,7 @@ function runTick() {
     const left = Math.max(0, Math.ceil((expectedEndTimestamp.value - Date.now()) / 1000));
     remainingSeconds.value = left;
     if (left <= 0) finishSession();
-  }, 300);
+  }, 250);
 }
 
 function clearTick() {
@@ -154,34 +204,76 @@ function clearTick() {
 function finishSession() {
   clearTick();
   isRunning.value = false;
-  remainingSeconds.value = 0;
   expectedEndTimestamp.value = null;
-  persistFocusRecord();
-  notifySessionFinished();
-  switchModeAfterFinish();
-  persistSnapshot();
-}
+  const finishedMode = normalizeModeKey(currentModeKey.value);
+  const finishedDuration = Number(sessionTotalSeconds.value || getModeDuration(finishedMode));
+  remainingSeconds.value = 0;
+  if (finishedMode === "focus") {
+    persistFocusRecord(finishedDuration);
+  }
+  notifySessionFinished(finishedMode);
 
-function switchModeAfterFinish() {
-  if (currentModeKey.value !== "focus") {
-    currentModeKey.value = "focus";
-    remainingSeconds.value = getModeDuration("focus");
+  if (finishedMode === "focus") {
+    // 专注结束后，休息阶段总是自动开始
+    applyMode("break", { autoStart: true, persist: true });
     return;
   }
-  currentModeKey.value = todayFocusCount.value % 4 === 0 ? "longBreak" : "shortBreak";
-  remainingSeconds.value = getModeDuration(currentModeKey.value);
+
+  // 休息结束后，是否自动进入下一个专注，取决于设置开关
+  const shouldAutoStartNextFocus = timerSettings.value.autoNextStage === true;
+  applyMode("focus", { autoStart: shouldAutoStartNextFocus, persist: true });
 }
 
-function notifySessionFinished() {
-  uni.showToast({ title: `${currentMode.value.label}结束`, icon: "none" });
+function notifySessionFinished(modeKey) {
+  const modeLabel = MODES[normalizeModeKey(modeKey)].label;
+  uni.showToast({ title: `${modeLabel}结束`, icon: "none" });
   if (timerSettings.value.notificationEnabled !== false) {
     uni.vibrateLong({ fail: () => {} });
   }
-  // #ifdef APP-PLUS
-  if (timerSettings.value.finishBellEnabled !== false && typeof plus !== "undefined" && plus.device?.beep) {
-    plus.device.beep(1);
+  if (timerSettings.value.finishBellEnabled !== false) playSessionTone(modeKey);
+}
+
+function playSessionTone(modeKey) {
+  stopSessionTone();
+  const normalized = normalizeModeKey(modeKey);
+  const src = normalized === "focus" ? "/static/audio/focus-end.wav" : "/static/audio/break-end.wav";
+  try {
+    const audio = uni.createInnerAudioContext();
+    audio.autoplay = false;
+    audio.loop = false;
+    audio.src = src;
+    audio.onEnded(() => stopSessionTone());
+    audio.onError(() => {
+      stopSessionTone();
+      fallbackBell();
+    });
+    toneAudioContext.value = audio;
+    audio.play();
+  } catch (error) {
+    fallbackBell();
   }
-  // #endif
+}
+
+function stopSessionTone() {
+  const audio = toneAudioContext.value;
+  if (!audio) return;
+  try {
+    audio.stop();
+  } catch (error) {}
+  try {
+    audio.destroy();
+  } catch (error) {}
+  toneAudioContext.value = null;
+}
+
+function fallbackBell() {
+  try {
+    if (typeof plus !== "undefined" && plus && plus.device && typeof plus.device.beep === "function") {
+      plus.device.beep(1);
+      return;
+    }
+  } catch (error) {}
+  uni.vibrateShort({ fail: () => {} });
 }
 
 function selectTask(taskId) {
@@ -194,14 +286,14 @@ function closeTaskPopup() {
   showTaskPopup.value = false;
 }
 
-function persistFocusRecord() {
-  if (currentModeKey.value !== "focus") return;
+function persistFocusRecord(durationSeconds) {
   const finishedAt = Date.now();
+  const safeDuration = Number.isFinite(Number(durationSeconds)) && Number(durationSeconds) > 0 ? Number(durationSeconds) : getModeDuration("focus");
   const record = {
     id: `${finishedAt}-${Math.random().toString(16).slice(2, 8)}`,
     mode: "focus",
-    durationSeconds: getModeDuration("focus"),
-    startAt: startTimestamp.value || finishedAt - getModeDuration("focus") * 1000,
+    durationSeconds: safeDuration,
+    startAt: startTimestamp.value || finishedAt - safeDuration * 1000,
     endAt: finishedAt,
     dateKey: getDateKey(finishedAt),
     taskId: selectedTaskId.value,
@@ -230,24 +322,63 @@ function getDateKey(ts) {
   return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
 }
 
+function getBootId() {
+  if (typeof getApp !== "function") return "default-boot";
+  const app = getApp();
+  if (!app) return "default-boot";
+  if (!app.globalData) app.globalData = {};
+  if (!app.globalData.__fgbBootId) {
+    app.globalData.__fgbBootId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  }
+  return app.globalData.__fgbBootId;
+}
+
 function persistSnapshot() {
   setUserStorage(STORAGE_KEYS.timerSnapshot, {
+    bootId: getBootId(),
     currentModeKey: currentModeKey.value,
     remainingSeconds: remainingSeconds.value,
+    sessionTotalSeconds: sessionTotalSeconds.value,
     isRunning: isRunning.value,
     expectedEndTimestamp: expectedEndTimestamp.value,
+    startTimestamp: startTimestamp.value,
     selectedTaskId: selectedTaskId.value,
   });
 }
 
+function resetToFocusInitial() {
+  clearTick();
+  isRunning.value = false;
+  currentModeKey.value = "focus";
+  const duration = getModeDuration("focus");
+  remainingSeconds.value = duration;
+  sessionTotalSeconds.value = duration;
+  expectedEndTimestamp.value = null;
+  startTimestamp.value = null;
+}
+
 function recoverSnapshot() {
-  const snapshot = getUserStorage(STORAGE_KEYS.timerSnapshot, {}) || {};
-  if (snapshot.currentModeKey) currentModeKey.value = snapshot.currentModeKey;
-  if (typeof snapshot.remainingSeconds === "number") remainingSeconds.value = snapshot.remainingSeconds;
+  const snapshot = getUserStorage(STORAGE_KEYS.timerSnapshot, null);
+  if (!snapshot || snapshot.bootId !== getBootId()) {
+    // 进程被杀后重新进入，强制回到专注初始态
+    resetToFocusInitial();
+    persistSnapshot();
+    return;
+  }
+
+  const restoredMode = normalizeModeKey(snapshot.currentModeKey);
+  currentModeKey.value = restoredMode;
+  const modeDuration = getModeDuration(restoredMode);
+  const restoredTotal = Number(snapshot.sessionTotalSeconds);
+  sessionTotalSeconds.value = Number.isFinite(restoredTotal) && restoredTotal > 0 ? restoredTotal : modeDuration;
+  const restoredRemaining = Number(snapshot.remainingSeconds);
+  remainingSeconds.value = Number.isFinite(restoredRemaining) ? Math.max(0, Math.min(restoredRemaining, sessionTotalSeconds.value)) : modeDuration;
+  startTimestamp.value = Number.isFinite(Number(snapshot.startTimestamp)) ? Number(snapshot.startTimestamp) : null;
   if (snapshot.selectedTaskId !== undefined) selectedTaskId.value = snapshot.selectedTaskId;
+
   if (!snapshot.isRunning || !snapshot.expectedEndTimestamp) return;
 
-  const left = Math.max(0, Math.ceil((snapshot.expectedEndTimestamp - Date.now()) / 1000));
+  const left = Math.max(0, Math.ceil((Number(snapshot.expectedEndTimestamp) - Date.now()) / 1000));
   remainingSeconds.value = left;
   if (left > 0) {
     isRunning.value = true;
@@ -263,9 +394,6 @@ function loadData() {
   themeVars.value = getThemeVars(timerSettings.value);
   todos.value = getUserStorage(STORAGE_KEYS.todos, []) || [];
   focusRecords.value = getUserStorage(STORAGE_KEYS.focusRecords, []) || [];
-  if (!getUserStorage(STORAGE_KEYS.timerSnapshot, null)) {
-    remainingSeconds.value = getModeDuration(currentModeKey.value);
-  }
 }
 
 onShow(() => {
@@ -279,11 +407,13 @@ onHide(() => {
     remainingSeconds.value = Math.max(0, Math.ceil((expectedEndTimestamp.value - Date.now()) / 1000));
   }
   clearTick();
+  stopSessionTone();
   persistSnapshot();
 });
 
 onUnload(() => {
   clearTick();
+  stopSessionTone();
   persistSnapshot();
 });
 </script>
@@ -294,6 +424,9 @@ onUnload(() => {
   padding: calc(24rpx + env(safe-area-inset-top)) 24rpx 40rpx;
   box-sizing: border-box;
   background: linear-gradient(165deg, var(--bg-start) 0%, var(--bg-end) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
 }
 
 .hero-card,
@@ -307,6 +440,10 @@ onUnload(() => {
 .hero-card {
   border-radius: 36rpx;
   padding: 26rpx;
+  flex: 1;
+  min-height: 860rpx;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero-top,
@@ -317,6 +454,12 @@ onUnload(() => {
   align-items: flex-start;
 }
 
+.status-switch {
+  padding: 8rpx 12rpx;
+  border-radius: 20rpx;
+  background: var(--accent-soft);
+}
+
 .eyebrow {
   display: block;
   font-size: calc(22rpx * var(--font-scale));
@@ -324,11 +467,22 @@ onUnload(() => {
 }
 
 .mode {
-  display: block;
-  margin-top: 10rpx;
+  display: inline-block;
+  margin-top: 8rpx;
   font-size: calc(46rpx * var(--font-scale));
   font-weight: 800;
   color: var(--text-main);
+}
+
+.mode-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.mode-emoji {
+  font-size: calc(32rpx * var(--font-scale));
+  opacity: 0.85;
 }
 
 .cycle-pill {
@@ -340,18 +494,28 @@ onUnload(() => {
 }
 
 .timer-ring {
+  --ring-progress: 0deg;
   margin: 28rpx auto 0;
-  width: 420rpx;
-  height: 420rpx;
+  width: 520rpx;
+  height: 520rpx;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(var(--accent) var(--ring-progress), #e5ecf2 0deg);
+  box-shadow: 0 16rpx 44rpx rgba(34, 61, 86, 0.16);
+}
+
+.timer-core {
+  width: 430rpx;
+  height: 430rpx;
+  border-radius: 50%;
+  background: var(--panel);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at center, #ffffff 0 52%, transparent 53%),
-    conic-gradient(var(--accent) 0deg, var(--accent-soft) 250deg, #eef4ef 360deg);
-  box-shadow: inset 0 0 0 18rpx rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 10rpx rgba(255, 255, 255, 0.9);
 }
 
 .timer-text {
@@ -367,7 +531,8 @@ onUnload(() => {
 }
 
 .action-row {
-  margin-top: 28rpx;
+  margin-top: auto;
+  padding-top: 30rpx;
   display: flex;
   gap: 18rpx;
 }
@@ -398,7 +563,6 @@ onUnload(() => {
 }
 
 .card {
-  margin-top: 18rpx;
   border-radius: 28rpx;
   padding: 22rpx;
 }
