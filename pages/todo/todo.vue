@@ -5,7 +5,7 @@
       <view class="hero">
         <view>
           <text class="eyebrow">工作待办</text>
-          <text class="headline">把最重要的事情排在最前面</text>
+          <text class="headline">把最重要的事情排在最前面💪💪💪</text>
         </view>
         <button class="add-btn" @tap="openCreateEditor">新增任务</button>
       </view>
@@ -483,7 +483,7 @@ onShow(() => {
 }
 
 .add-btn {
-  align-self: flex-start;
+  align-self: flex-end;
   min-width: 178rpx;
   padding: 0 28rpx;
   height: 74rpx;

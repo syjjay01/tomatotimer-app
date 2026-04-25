@@ -8,10 +8,10 @@
           <text class="headline">{{ selectedDateLabel }}</text>
         </view>
         <view class="date-actions">
+          <view v-if="!isTodaySelected" class="today-trigger" @tap="goToday">回到当日</view>
           <picker mode="date" :value="selectedDate" @change="onDateChange">
             <view class="date-trigger">切换日期</view>
           </picker>
-          <view v-if="!isTodaySelected" class="today-trigger" @tap="goToday">回到当日</view>
         </view>
       </view>
     </view>
@@ -19,11 +19,18 @@
     <scroll-view class="content-scroll" scroll-y>
       <view class="content-inner">
         <view class="card">
-          <view class="section-head">
+          <view class="section-head section-head-log">
             <text class="section-title">今日记录</text>
-            <text class="voice-trigger" :class="{ listening: voiceListening }" @tap="startVoiceInput">
-              {{ voiceListening ? "识别中..." : "语音识别" }}
-            </text>
+            <view class="section-actions">
+              <view class="quick-inline">
+                <text class="quick-btn" @tap="appendQuick('todayDone')">今日完成</text>
+                <text class="quick-btn" @tap="appendQuick('blocked')">阻塞</text>
+                <text class="quick-btn" @tap="appendQuick('learned')">学到</text>
+              </view>
+              <text class="voice-trigger" :class="{ listening: voiceListening }" @tap="startVoiceInput">
+                {{ voiceListening ? "识别中..." : "语音识别" }}
+              </text>
+            </view>
           </view>
           <scroll-view class="editor-scroll" scroll-y :scroll-top="editorScrollTop" scroll-with-animation>
             <textarea
@@ -37,17 +44,15 @@
               :selection-end="editorSelectionEnd"
               :auto-height="false"
               :disable-default-padding="true"
+              :adjust-position="false"
+              @input="onEditorInput"
+              @focus="onEditorFocus"
+              @blur="onEditorBlur"
               show-confirm-bar="false"
               placeholder="记录进展、阻塞和今天的收获..."
               maxlength="5000"
             />
           </scroll-view>
-          <view class="quick-row">
-            <text class="quick-btn" @tap="appendQuick('todayDone')">今日完成</text>
-            <text class="quick-btn" @tap="appendQuick('blocked')">阻塞</text>
-            <text class="quick-btn" @tap="appendQuick('learned')">学到</text>
-            <text class="quick-btn" @tap="appendQuick('done')">完成</text>
-          </view>
           <text class="save-tip">{{ saveTip }}</text>
         </view>
 
@@ -70,7 +75,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import { onShow, onUnload } from "@dcloudio/uni-app";
+import { onHide, onShow, onUnload } from "@dcloudio/uni-app";
 import { getUserStorage, setUserStorage } from "../../utils/user-storage";
 import { ensureLogin } from "../../utils/guard";
 import { getAppSettings, getThemeVars } from "../../utils/theme";
@@ -86,8 +91,8 @@ const QUICK_SECTIONS = [
   { key: "todayDone", heading: "✅ 今日完成" },
   { key: "blocked", heading: "❌ 阻塞" },
   { key: "learned", heading: "📚 学到" },
-  { key: "done", heading: "📌 完成" },
 ];
+const LEGACY_QUICK_HEADINGS = ["📌 完成"];
 
 const selectedDate = ref(getDateKey(Date.now()));
 const logContent = ref("");
@@ -110,6 +115,7 @@ const editorVisibleLineCount = ref(8);
 const editorWrapCharCount = ref(22);
 const editorViewportHeightPx = ref(300);
 const windowWidthPx = ref(375);
+const keyboardListenerBound = ref(false);
 
 const selectedDateLabel = computed(() => normalizeDateKey(selectedDate.value).replace(/-/g, "."));
 const isTodaySelected = computed(() => selectedDate.value === getDateKey(Date.now()));
@@ -154,7 +160,7 @@ function appendQuickSection(content, heading) {
   }
 
   const lines = normalized.split("\n");
-  const headingSet = new Set(QUICK_SECTIONS.map((item) => item.heading));
+  const headingSet = new Set([...QUICK_SECTIONS.map((item) => item.heading), ...LEGACY_QUICK_HEADINGS]);
   const headingIndex = lines.findIndex((line) => line.trim() === heading);
 
   if (headingIndex === -1) {
@@ -244,40 +250,129 @@ function syncEditorScrollToCursor(cursorPosition) {
   editorScrollTop.value = targetTop;
 }
 
+function normalizeEditorRange(start, end = start) {
+  const textLength = String(logContent.value || "").length;
+  let safeStart = Number(start);
+  let safeEnd = Number(end);
+  if (!Number.isFinite(safeStart) || safeStart < 0) safeStart = textLength;
+  if (!Number.isFinite(safeEnd) || safeEnd < 0) safeEnd = safeStart;
+  safeStart = Math.max(0, Math.min(textLength, Math.round(safeStart)));
+  safeEnd = Math.max(0, Math.min(textLength, Math.round(safeEnd)));
+  if (safeEnd < safeStart) [safeStart, safeEnd] = [safeEnd, safeStart];
+  return { start: safeStart, end: safeEnd };
+}
+
+function updateEditorSelection(start, end = start) {
+  const range = normalizeEditorRange(start, end);
+  editorCursor.value = range.end;
+  editorSelectionStart.value = range.start;
+  editorSelectionEnd.value = range.end;
+  return range;
+}
+
+function extractCursorRange(event) {
+  const detail = event?.detail || {};
+  const startRaw = Number(detail.selectionStart);
+  const endRaw = Number(detail.selectionEnd);
+  if (Number.isFinite(startRaw) && startRaw >= 0 && Number.isFinite(endRaw) && endRaw >= 0) {
+    return normalizeEditorRange(startRaw, endRaw);
+  }
+  const cursorRaw = Number(detail.cursor);
+  if (Number.isFinite(cursorRaw) && cursorRaw >= 0) {
+    return normalizeEditorRange(cursorRaw, cursorRaw);
+  }
+  return null;
+}
+
+function getCurrentEditorRange() {
+  const startRaw = Number(editorSelectionStart.value);
+  const endRaw = Number(editorSelectionEnd.value);
+  if (Number.isFinite(startRaw) && startRaw >= 0 && Number.isFinite(endRaw) && endRaw >= 0) {
+    return normalizeEditorRange(startRaw, endRaw);
+  }
+  const cursorRaw = Number(editorCursor.value);
+  if (Number.isFinite(cursorRaw) && cursorRaw >= 0) {
+    return normalizeEditorRange(cursorRaw, cursorRaw);
+  }
+  const textLength = String(logContent.value || "").length;
+  return { start: textLength, end: textLength };
+}
+
+function onEditorInput(event) {
+  const range = extractCursorRange(event);
+  if (!range) return;
+  updateEditorSelection(range.start, range.end);
+}
+
+function onEditorFocus(event) {
+  editorFocus.value = true;
+  setTabBarVisible(false);
+  const range = extractCursorRange(event);
+  if (range) updateEditorSelection(range.start, range.end);
+  nextTick(() => {
+    measureEditorViewport();
+    syncEditorScrollToCursor(getCurrentEditorRange().end);
+  });
+  setTimeout(() => {
+    measureEditorViewport();
+    syncEditorScrollToCursor(getCurrentEditorRange().end);
+  }, 80);
+}
+
+function onEditorBlur(event) {
+  editorFocus.value = false;
+  setTabBarVisible(true);
+  const range = extractCursorRange(event);
+  if (range) updateEditorSelection(range.start, range.end);
+  nextTick(() => measureEditorViewport());
+}
+
+function setTabBarVisible(visible) {
+  const fn = visible ? uni.showTabBar : uni.hideTabBar;
+  if (typeof fn !== "function") return;
+  try {
+    fn({
+      animation: false,
+      fail: () => {},
+    });
+  } catch (error) {}
+}
+
+function handleKeyboardHeightChange(event) {
+  const height = Number(event?.height || 0);
+  setTabBarVisible(height <= 0);
+  nextTick(() => {
+    measureEditorViewport();
+    syncEditorScrollToCursor(getCurrentEditorRange().end);
+  });
+  setTimeout(() => {
+    measureEditorViewport();
+    syncEditorScrollToCursor(getCurrentEditorRange().end);
+  }, 80);
+}
+
+function bindKeyboardListener() {
+  if (keyboardListenerBound.value || typeof uni.onKeyboardHeightChange !== "function") return;
+  uni.onKeyboardHeightChange(handleKeyboardHeightChange);
+  keyboardListenerBound.value = true;
+}
+
+function unbindKeyboardListener() {
+  if (!keyboardListenerBound.value || typeof uni.offKeyboardHeightChange !== "function") return;
+  uni.offKeyboardHeightChange(handleKeyboardHeightChange);
+  keyboardListenerBound.value = false;
+}
+
 function focusEditorAt(cursorPosition) {
-  const safeCursor = Math.max(0, Number(cursorPosition || 0));
+  const range = updateEditorSelection(cursorPosition, cursorPosition);
+  const safeCursor = range.end;
   syncEditorScrollToCursor(safeCursor);
   editorRenderKey.value += 1;
   editorFocus.value = false;
-  editorCursor.value = -1;
-  editorSelectionStart.value = -1;
-  editorSelectionEnd.value = -1;
   nextTick(() => {
-    editorCursor.value = safeCursor;
-    editorSelectionStart.value = safeCursor;
-    editorSelectionEnd.value = safeCursor;
+    updateEditorSelection(safeCursor, safeCursor);
     editorFocus.value = true;
     syncEditorScrollToCursor(safeCursor);
-    nextTick(() => {
-      editorCursor.value = safeCursor;
-      editorSelectionStart.value = safeCursor;
-      editorSelectionEnd.value = safeCursor;
-      editorFocus.value = true;
-      syncEditorScrollToCursor(safeCursor);
-      setTimeout(() => {
-        editorCursor.value = safeCursor;
-        editorSelectionStart.value = safeCursor;
-        editorSelectionEnd.value = safeCursor;
-        editorFocus.value = true;
-        syncEditorScrollToCursor(safeCursor);
-      }, 32);
-      setTimeout(() => {
-        editorCursor.value = safeCursor;
-        editorSelectionStart.value = safeCursor;
-        editorSelectionEnd.value = safeCursor;
-        syncEditorScrollToCursor(safeCursor);
-      }, 120);
-    });
   });
 }
 
@@ -314,10 +409,10 @@ function appendVoiceText(text) {
   const phrase = String(text || "").trim();
   if (!phrase) return;
   const base = String(logContent.value || "");
-  const separator = !base ? "" : base.endsWith("\n") ? "" : "\n";
-  const nextText = `${base}${separator}${phrase}`;
+  const range = getCurrentEditorRange();
+  const nextText = `${base.slice(0, range.start)}${phrase}${base.slice(range.end)}`;
   logContent.value = nextText;
-  focusEditorAt(nextText.length);
+  focusEditorAt(range.start + phrase.length);
 }
 
 function stopVoiceInput() {
@@ -432,6 +527,8 @@ watch(logContent, scheduleSave);
 
 onShow(() => {
   if (!ensureLogin()) return;
+  bindKeyboardListener();
+  setTabBarVisible(true);
   const sysInfo = uni.getSystemInfoSync ? uni.getSystemInfoSync() : {};
   statusBarHeight.value = Math.max(0, Number(sysInfo?.statusBarHeight || 0));
   windowWidthPx.value = Math.max(1, Number(sysInfo?.windowWidth || 375));
@@ -446,7 +543,14 @@ onShow(() => {
   });
 });
 
+onHide(() => {
+  setTabBarVisible(true);
+  unbindKeyboardListener();
+});
+
 onUnload(() => {
+  setTabBarVisible(true);
+  unbindKeyboardListener();
   stopVoiceInput();
   if (saveTimer.value) clearTimeout(saveTimer.value);
   saveCurrentLog();
@@ -489,9 +593,11 @@ onUnload(() => {
 
 .date-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10rpx;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: flex-end;
+  gap: 12rpx;
 }
 
 .eyebrow {
@@ -510,11 +616,16 @@ onUnload(() => {
 
 .date-trigger,
 .today-trigger {
-  padding: 14rpx 22rpx;
+  min-width: 152rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  box-sizing: border-box;
+  text-align: center;
+  padding: 0 24rpx;
   border-radius: 999rpx;
   background: var(--accent-soft);
   color: var(--accent-deep);
-  font-size: calc(22rpx * var(--font-scale));
+  font-size: calc(24rpx * var(--font-scale));
   font-weight: 700;
 }
 
@@ -549,13 +660,40 @@ onUnload(() => {
   align-items: center;
 }
 
+.section-head-log {
+  gap: 12rpx;
+}
+
 .section-title {
+  flex-shrink: 0;
   font-size: calc(30rpx * var(--font-scale));
   font-weight: 700;
   color: var(--text-main);
 }
 
+.section-actions {
+  margin-left: auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.quick-inline {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  justify-content: flex-end;
+}
+
+.quick-inline::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .voice-trigger {
+  flex-shrink: 0;
   padding: 10rpx 16rpx;
   border-radius: 14rpx;
   background: var(--accent-soft);
@@ -603,19 +741,18 @@ onUnload(() => {
   background: rgba(92, 120, 145, 0.45);
 }
 
-.quick-row {
-  margin-top: 18rpx;
-  display: flex;
-  gap: 12rpx;
-  flex-wrap: wrap;
-}
-
 .quick-btn {
-  padding: 14rpx 18rpx;
+  flex-shrink: 0;
+  width: 108rpx;
+  height: 54rpx;
+  line-height: 54rpx;
+  box-sizing: border-box;
+  text-align: center;
+  padding: 0;
   border-radius: 18rpx;
   background: var(--accent-soft);
   color: var(--accent-deep);
-  font-size: calc(22rpx * var(--font-scale));
+  font-size: calc(20rpx * var(--font-scale));
   font-weight: 700;
 }
 

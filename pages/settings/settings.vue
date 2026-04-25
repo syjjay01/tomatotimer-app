@@ -1,83 +1,91 @@
 <template>
   <view class="page" :style="themeVars">
-    <view class="hero">
-      <text class="eyebrow">我的</text>
-      <view class="account-row">
-        <text class="headline">{{ currentUsername || "未登录" }}</text>
-        <view class="account-actions">
-          <button class="mini-btn" @tap="logout">退出</button>
-          <button class="mini-btn danger" @tap="deleteAccount">注销</button>
-        </view>
-      </view>
-    </view>
+    <view class="safe-top" :style="{ height: `${statusBarHeight}px` }"></view>
 
-    <view class="card">
-      <text class="group-title">番茄钟设置</text>
-      <view class="field-row">
-        <text class="field-label">专注时长</text>
-        <view class="stepper">
-          <text class="step-btn" :class="{ disabled: !canAdjustFocus(-1) }" @tap="adjustFocus(-1)">-</text>
-          <text class="step-value">{{ form.focusMinutes }} 分钟</text>
-          <text class="step-btn" :class="{ disabled: !canAdjustFocus(1) }" @tap="adjustFocus(1)">+</text>
-        </view>
-      </view>
-      <view class="field-row">
-        <text class="field-label">休息时长</text>
-        <view class="stepper">
-          <text class="step-btn" :class="{ disabled: !canAdjustBreak(-1) }" @tap="adjustBreak(-1)">-</text>
-          <text class="step-value">{{ form.breakMinutes }} 分钟</text>
-          <text class="step-btn" :class="{ disabled: !canAdjustBreak(1) }" @tap="adjustBreak(1)">+</text>
-        </view>
-      </view>
-      <view class="field-row last">
-        <text class="field-label">自动进入下一个番茄钟</text>
-        <switch :checked="form.autoNextStage" :color="themeVars['--accent']" @change="onSwitch('autoNextStage', $event)" />
-      </view>
-    </view>
-
-    <view class="card">
-      <text class="group-title">目标与提醒</text>
-      <view class="field-row">
-        <text class="field-label">每日目标番茄数</text>
-        <input class="number-input" type="number" v-model="form.dailyGoal" @blur="normalizeNumber('dailyGoal', 8, 1, 99)" />
-      </view>
-      <view class="field-row last">
-        <text class="field-label">结束铃声</text>
-        <switch :checked="form.finishBellEnabled" :color="themeVars['--accent']" @change="onSwitch('finishBellEnabled', $event)" />
-      </view>
-    </view>
-
-    <view class="card">
-      <text class="group-title">外观</text>
-      <text class="group-desc">选择你喜欢的风格，页面会立即切换。</text>
-      <view class="scheme-grid">
-        <view v-for="item in colorSchemes" :key="item.value" class="scheme-card" :class="{ active: form.colorScheme === item.value }" @tap="selectScheme(item.value)">
-          <view class="scheme-swatches">
-            <view class="swatch" :style="{ background: item.colors[0] }"></view>
-            <view class="swatch" :style="{ background: item.colors[1] }"></view>
-            <view class="swatch" :style="{ background: item.colors[2] }"></view>
+    <view class="top-fixed">
+      <view class="hero">
+        <text class="eyebrow">我的</text>
+        <view class="account-row">
+          <text class="headline">{{ currentUsername || "未登录" }}</text>
+          <view class="account-actions">
+            <button class="mini-btn" @tap="logout">退出</button>
+            <button class="mini-btn danger" @tap="deleteAccount">注销</button>
           </view>
-          <text class="scheme-name">{{ item.label }}</text>
         </view>
-      </view>
-
-      <view class="font-row">
-        <text class="field-label">字体大小</text>
-      </view>
-      <view class="font-options">
-        <text
-          v-for="item in fontScaleOptions"
-          :key="item.value"
-          class="font-pill"
-          :class="{ active: form.fontScale === item.value }"
-          @tap="selectFontScale(item.value)"
-        >
-          {{ item.label }}
-        </text>
       </view>
     </view>
 
-    <text class="version-text">V1.0.0</text>
+    <scroll-view class="content-scroll" scroll-y>
+      <view class="content-inner">
+        <view class="card">
+          <text class="group-title">番茄钟设置</text>
+          <view class="field-row">
+            <text class="field-label">专注时长</text>
+            <view class="stepper">
+              <text class="step-btn" :class="{ disabled: !canAdjustFocus(-1) }" @tap="adjustFocus(-1)">-</text>
+              <text class="step-value">{{ form.focusMinutes }} 分钟</text>
+              <text class="step-btn" :class="{ disabled: !canAdjustFocus(1) }" @tap="adjustFocus(1)">+</text>
+            </view>
+          </view>
+          <view class="field-row">
+            <text class="field-label">休息时长</text>
+            <view class="stepper">
+              <text class="step-btn" :class="{ disabled: !canAdjustBreak(-1) }" @tap="adjustBreak(-1)">-</text>
+              <text class="step-value">{{ form.breakMinutes }} 分钟</text>
+              <text class="step-btn" :class="{ disabled: !canAdjustBreak(1) }" @tap="adjustBreak(1)">+</text>
+            </view>
+          </view>
+          <view class="field-row last">
+            <text class="field-label">自动进入下一个番茄钟</text>
+            <switch :checked="form.autoNextStage" :color="themeVars['--accent']" @change="onSwitch('autoNextStage', $event)" />
+          </view>
+        </view>
+
+        <view class="card">
+          <text class="group-title">目标与提醒</text>
+          <view class="field-row">
+            <text class="field-label">每日目标番茄数</text>
+            <input class="number-input" type="number" v-model="form.dailyGoal" @blur="normalizeNumber('dailyGoal', 8, 1, 99)" />
+          </view>
+          <view class="field-row last">
+            <text class="field-label">结束铃声</text>
+            <switch :checked="form.finishBellEnabled" :color="themeVars['--accent']" @change="onSwitch('finishBellEnabled', $event)" />
+          </view>
+        </view>
+
+        <view class="card">
+          <text class="group-title">外观</text>
+          <text class="group-desc">选择你喜欢的风格，页面会立即切换。</text>
+          <view class="scheme-grid">
+            <view v-for="item in colorSchemes" :key="item.value" class="scheme-card" :class="{ active: form.colorScheme === item.value }" @tap="selectScheme(item.value)">
+              <view class="scheme-swatches">
+                <view class="swatch" :style="{ background: item.colors[0] }"></view>
+                <view class="swatch" :style="{ background: item.colors[1] }"></view>
+                <view class="swatch" :style="{ background: item.colors[2] }"></view>
+              </view>
+              <text class="scheme-name">{{ item.label }}</text>
+            </view>
+          </view>
+
+          <view class="font-row">
+            <text class="field-label">字体大小</text>
+          </view>
+          <view class="font-options">
+            <text
+              v-for="item in fontScaleOptions"
+              :key="item.value"
+              class="font-pill"
+              :class="{ active: form.fontScale === item.value }"
+              @tap="selectFontScale(item.value)"
+            >
+              {{ item.label }}
+            </text>
+          </view>
+        </view>
+
+        <text class="version-text">V1.0.0</text>
+      </view>
+    </scroll-view>
   </view>
 </template>
 
@@ -122,6 +130,7 @@ const fontScaleOptions = [
 const form = ref({ ...DEFAULT_FORM });
 const currentUsername = ref("");
 const themeVars = ref(getThemeVars(getAppSettings()));
+const statusBarHeight = ref(0);
 
 function loadSettings() {
   const saved = getUserStorage(SETTINGS_KEY, {}) || {};
@@ -242,6 +251,8 @@ function clampNumber(raw, fallback, min, max) {
 
 onShow(() => {
   if (!ensureLogin()) return;
+  const sysInfo = uni.getSystemInfoSync ? uni.getSystemInfoSync() : {};
+  statusBarHeight.value = Math.max(0, Number(sysInfo?.statusBarHeight || 0));
   currentUsername.value = getCurrentUser()?.username || "";
   loadSettings();
 });
@@ -249,10 +260,31 @@ onShow(() => {
 
 <style scoped>
 .page {
-  min-height: 100vh;
-  padding: calc(24rpx + env(safe-area-inset-top)) 24rpx 40rpx;
+  height: 100vh;
+  padding: 20rpx 24rpx calc(env(safe-area-inset-bottom) + 22rpx);
   box-sizing: border-box;
   background: linear-gradient(165deg, var(--bg-start) 0%, var(--bg-end) 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.safe-top {
+  flex-shrink: 0;
+}
+
+.top-fixed {
+  flex-shrink: 0;
+}
+
+.content-scroll {
+  margin-top: 12rpx;
+  flex: 1;
+  min-height: 0;
+}
+
+.content-inner {
+  padding-bottom: 8rpx;
 }
 
 .hero,
@@ -303,19 +335,22 @@ onShow(() => {
 
 .account-actions {
   display: flex;
-  gap: 10rpx;
+  gap: 12rpx;
   flex-shrink: 0;
 }
 
 .mini-btn {
-  height: 62rpx;
-  line-height: 62rpx;
-  padding: 0 20rpx;
+  min-width: 108rpx;
+  height: 74rpx;
+  line-height: 74rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
   border-radius: 999rpx;
   background: var(--accent-soft);
   color: var(--accent-deep);
-  font-size: calc(22rpx * var(--font-scale));
+  font-size: calc(24rpx * var(--font-scale));
   font-weight: 700;
+  text-align: center;
 }
 
 .mini-btn.danger {
@@ -331,6 +366,10 @@ onShow(() => {
   margin-top: 18rpx;
   border-radius: 28rpx;
   padding: 22rpx;
+}
+
+.content-inner .card:first-child {
+  margin-top: 0;
 }
 
 .group-title {

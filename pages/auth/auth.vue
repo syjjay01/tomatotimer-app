@@ -3,43 +3,46 @@
     <view class="ambient ambient-a"></view>
     <view class="ambient ambient-b"></view>
 
-    <view class="hero">
-      <view class="brand-row">
-        <text class="brand">番工宝</text>
-        <image class="brand-logo" src="/static/tabbar/timer-active-v2.png" mode="aspectFit" />
+    <view class="safe-top" :style="{ height: `${statusBarHeight}px` }"></view>
+
+    <view class="center-wrap">
+      <view class="hero">
+        <view class="brand-row">
+          <text class="brand">番工宝</text>
+          <image class="brand-logo" src="/static/tabbar/timer-active-v2.png" mode="aspectFit" />
+        </view>
+        <text class="headline">把专注、待办和工作痕迹放进同一节奏里</text>
+        <text class="subline">先登录，再开始今天的番茄钟。</text>
       </view>
-      <text class="headline">把专注、待办和工作痕迹放进同一节奏里</text>
-      <text class="subline">先登录，再开始今天的番茄钟。</text>
-    </view>
+      <view class="panel">
+        <view class="tabs">
+          <view class="tab" :class="{ active: tab === 'login' }" @tap="switchTab('login')">登录</view>
+          <view class="tab" :class="{ active: tab === 'register' }" @tap="switchTab('register')">注册</view>
+        </view>
 
-    <view class="panel">
-      <view class="tabs">
-        <view class="tab" :class="{ active: tab === 'login' }" @tap="switchTab('login')">登录</view>
-        <view class="tab" :class="{ active: tab === 'register' }" @tap="switchTab('register')">注册</view>
+        <view class="field">
+          <text class="field-label">账号</text>
+          <input v-model.trim="username" class="input" placeholder="输入你的账号名" />
+        </view>
+
+        <view class="field">
+          <text class="field-label">密码</text>
+          <input v-model="password" class="input" password placeholder="至少 6 位密码" />
+        </view>
+
+        <view v-if="tab === 'register'" class="field">
+          <text class="field-label">确认密码</text>
+          <input v-model="confirmPassword" class="input" password placeholder="再次输入密码" />
+        </view>
+
+        <button class="primary-btn" @tap="submit">
+          {{ tab === "login" ? "进入番工宝" : "创建账号并进入" }}
+        </button>
+
+        <text class="hint">
+          {{ tab === "login" ? "如果账号不存在，会自动切到注册。" : "注册成功后会直接登录，并进入主应用。" }}
+        </text>
       </view>
-
-      <view class="field">
-        <text class="field-label">账号</text>
-        <input v-model.trim="username" class="input" placeholder="输入你的账号名" />
-      </view>
-
-      <view class="field">
-        <text class="field-label">密码</text>
-        <input v-model="password" class="input" password placeholder="至少 6 位密码" />
-      </view>
-
-      <view v-if="tab === 'register'" class="field">
-        <text class="field-label">确认密码</text>
-        <input v-model="confirmPassword" class="input" password placeholder="再次输入密码" />
-      </view>
-
-      <button class="primary-btn" @tap="submit">
-        {{ tab === "login" ? "进入番工宝" : "创建账号并进入" }}
-      </button>
-
-      <text class="hint">
-        {{ tab === "login" ? "如果账号不存在，会自动切到注册。" : "注册成功后会直接登录，并进入主应用。" }}
-      </text>
     </view>
   </view>
 </template>
@@ -55,6 +58,7 @@ const username = ref("");
 const password = ref("");
 const confirmPassword = ref("");
 const themeVars = ref(getThemeVars(getAppSettings()));
+const statusBarHeight = ref(0);
 
 function switchTab(nextTab) {
   tab.value = nextTab;
@@ -109,20 +113,39 @@ onShow(() => {
     uni.switchTab({ url: "/pages/timer/timer" });
     return;
   }
+  const sysInfo = uni.getSystemInfoSync ? uni.getSystemInfoSync() : {};
+  statusBarHeight.value = Math.max(0, Number(sysInfo?.statusBarHeight || 0));
   themeVars.value = getThemeVars(getAppSettings());
 });
 </script>
 
 <style scoped>
 .page {
-  min-height: 100vh;
-  padding: calc(40rpx + env(safe-area-inset-top)) 28rpx 36rpx;
+  height: 100vh;
+  padding: 24rpx 28rpx calc(env(safe-area-inset-bottom) + 20rpx);
   box-sizing: border-box;
   background:
     radial-gradient(circle at top left, var(--accent-soft) 0, transparent 34%),
     linear-gradient(160deg, var(--bg-start) 0%, var(--bg-end) 100%);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.safe-top {
+  flex-shrink: 0;
+}
+
+.center-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: clamp(88rpx, 11vh, 180rpx);
+  padding-bottom: 24rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .ambient {
@@ -149,9 +172,7 @@ onShow(() => {
 }
 
 .hero {
-  position: relative;
-  z-index: 1;
-  padding-top: 36rpx;
+  padding-top: 0;
 }
 
 .brand-row {
@@ -195,9 +216,7 @@ onShow(() => {
 }
 
 .panel {
-  position: relative;
-  z-index: 1;
-  margin-top: 42rpx;
+  margin-top: 36rpx;
   background: var(--panel);
   backdrop-filter: blur(18rpx);
   border-radius: 32rpx;
