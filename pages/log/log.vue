@@ -1,55 +1,70 @@
 <template>
   <view class="page" :style="themeVars">
-    <view class="hero">
-      <view>
-        <text class="eyebrow">工作日志</text>
-        <text class="headline">{{ selectedDateLabel }}</text>
-      </view>
-      <view class="date-actions">
-        <picker mode="date" :value="selectedDate" @change="onDateChange">
-          <view class="date-trigger">切换日期</view>
-        </picker>
-        <view v-if="!isTodaySelected" class="today-trigger" @tap="goToday">回到当日</view>
+    <view class="safe-top" :style="{ height: `${statusBarHeight}px` }"></view>
+    <view class="top-fixed">
+      <view class="hero">
+        <view>
+          <text class="eyebrow">工作日志</text>
+          <text class="headline">{{ selectedDateLabel }}</text>
+        </view>
+        <view class="date-actions">
+          <picker mode="date" :value="selectedDate" @change="onDateChange">
+            <view class="date-trigger">切换日期</view>
+          </picker>
+          <view v-if="!isTodaySelected" class="today-trigger" @tap="goToday">回到当日</view>
+        </view>
       </view>
     </view>
 
-    <view class="card">
-      <view class="section-head">
-        <text class="section-title">今日记录</text>
-        <text class="voice-trigger" :class="{ listening: voiceListening }" @tap="startVoiceInput">
-          {{ voiceListening ? "识别中..." : "语音识别" }}
-        </text>
-      </view>
-      <textarea
-        v-model="logContent"
-        class="editor"
-        :focus="editorFocus"
-        :cursor="editorCursor"
-        :auto-height="false"
-        show-confirm-bar="false"
-        placeholder="记录进展、阻塞和今天的收获..."
-        maxlength="5000"
-      />
-      <view class="quick-row">
-        <text class="quick-btn" @tap="appendQuick('todayDone')">今日完成</text>
-        <text class="quick-btn" @tap="appendQuick('blocked')">阻塞</text>
-        <text class="quick-btn" @tap="appendQuick('done')">完成</text>
-      </view>
-      <text class="save-tip">{{ saveTip }}</text>
-    </view>
+    <scroll-view class="content-scroll" scroll-y>
+      <view class="content-inner">
+        <view class="card">
+          <view class="section-head">
+            <text class="section-title">今日记录</text>
+            <text class="voice-trigger" :class="{ listening: voiceListening }" @tap="startVoiceInput">
+              {{ voiceListening ? "识别中..." : "语音识别" }}
+            </text>
+          </view>
+          <scroll-view class="editor-scroll" scroll-y :scroll-top="editorScrollTop" scroll-with-animation>
+            <textarea
+              :key="editorRenderKey"
+              v-model="logContent"
+              class="editor"
+              :style="{ height: `${editorComputedHeight}px` }"
+              :focus="editorFocus"
+              :cursor="editorCursor"
+              :selection-start="editorSelectionStart"
+              :selection-end="editorSelectionEnd"
+              :auto-height="false"
+              :disable-default-padding="true"
+              show-confirm-bar="false"
+              placeholder="记录进展、阻塞和今天的收获..."
+              maxlength="5000"
+            />
+          </scroll-view>
+          <view class="quick-row">
+            <text class="quick-btn" @tap="appendQuick('todayDone')">今日完成</text>
+            <text class="quick-btn" @tap="appendQuick('blocked')">阻塞</text>
+            <text class="quick-btn" @tap="appendQuick('learned')">学到</text>
+            <text class="quick-btn" @tap="appendQuick('done')">完成</text>
+          </view>
+          <text class="save-tip">{{ saveTip }}</text>
+        </view>
 
-    <view class="card">
-      <view class="section-head">
-        <text class="section-title">当天番茄记录</text>
-        <text class="section-meta">{{ dailyFocusRecords.length }} 条</text>
+        <view class="card">
+          <view class="section-head">
+            <text class="section-title">当天番茄记录</text>
+            <text class="section-meta">{{ dailyFocusRecords.length }} 条</text>
+          </view>
+          <view v-if="dailyFocusRecords.length === 0" class="empty">这一天还没有专注记录。</view>
+          <view v-for="record in dailyFocusRecords" :key="record.id" class="record-item">
+            <text class="record-time">{{ formatTime(record.startAt) }} - {{ formatTime(record.endAt) }}</text>
+            <text class="record-task">{{ record.taskTitle || "独立模式" }}</text>
+            <text class="record-duration">{{ Math.round((record.durationSeconds || 0) / 60) }} 分钟</text>
+          </view>
+        </view>
       </view>
-      <view v-if="dailyFocusRecords.length === 0" class="empty">这一天还没有专注记录。</view>
-      <view v-for="record in dailyFocusRecords" :key="record.id" class="record-item">
-        <text class="record-time">{{ formatTime(record.startAt) }} - {{ formatTime(record.endAt) }}</text>
-        <text class="record-task">{{ record.taskTitle || "独立模式" }}</text>
-        <text class="record-duration">{{ Math.round((record.durationSeconds || 0) / 60) }} 分钟</text>
-      </view>
-    </view>
+    </scroll-view>
   </view>
 </template>
 
@@ -70,6 +85,7 @@ const STORAGE_KEYS = {
 const QUICK_SECTIONS = [
   { key: "todayDone", heading: "✅ 今日完成" },
   { key: "blocked", heading: "❌ 阻塞" },
+  { key: "learned", heading: "📚 学到" },
   { key: "done", heading: "📌 完成" },
 ];
 
@@ -83,10 +99,27 @@ const saveTimer = ref(null);
 const themeVars = ref(getThemeVars(getAppSettings()));
 const voiceListening = ref(false);
 const editorCursor = ref(-1);
+const editorSelectionStart = ref(-1);
+const editorSelectionEnd = ref(-1);
 const editorFocus = ref(false);
+const editorRenderKey = ref(0);
+const statusBarHeight = ref(0);
+const editorScrollTop = ref(0);
+const editorLineHeightPx = ref(26);
+const editorVisibleLineCount = ref(8);
+const editorWrapCharCount = ref(22);
+const editorViewportHeightPx = ref(300);
+const windowWidthPx = ref(375);
 
 const selectedDateLabel = computed(() => normalizeDateKey(selectedDate.value).replace(/-/g, "."));
 const isTodaySelected = computed(() => selectedDate.value === getDateKey(Date.now()));
+const editorComputedHeight = computed(() => {
+  const linePx = Math.max(18, Number(editorLineHeightPx.value || 26));
+  const paddingPx = rpxToPx(40);
+  const totalLineCount = estimateVisualLineIndex(logContent.value, String(logContent.value || "").length);
+  const rawHeight = Math.ceil(totalLineCount * linePx + paddingPx);
+  return Math.max(Number(editorViewportHeightPx.value || 300), rawHeight);
+});
 const dailyFocusRecords = computed(() =>
   focusRecords.value
     .filter((item) => item.dateKey === selectedDate.value && item.mode === "focus")
@@ -150,18 +183,101 @@ function appendQuickSection(content, heading) {
 
 function getCursorByLineIndex(lines, lineIndex) {
   let cursor = 0;
-  for (let i = 0; i <= lineIndex && i < lines.length; i += 1) {
-    cursor += lines[i].length;
-    if (i < lines.length - 1) cursor += 1;
+  for (let i = 0; i < lineIndex && i < lines.length; i += 1) {
+    cursor += lines[i].length + 1;
   }
+  if (lineIndex >= 0 && lineIndex < lines.length) cursor += lines[lineIndex].length;
   return cursor;
 }
 
+function rpxToPx(rpx) {
+  return (Number(rpx || 0) * Math.max(1, Number(windowWidthPx.value || 375))) / 750;
+}
+
+function measureEditorViewport() {
+  const query = uni.createSelectorQuery();
+  query.select(".editor-scroll").boundingClientRect();
+  query.exec((res) => {
+    const rect = res?.[0];
+    if (!rect) return;
+    const height = Number(rect.height || 0);
+    const width = Number(rect.width || 0);
+    if (height <= 0 || width <= 0) return;
+    editorViewportHeightPx.value = height;
+    const fontScale = Number(getAppSettings().fontScale || 110) / 100;
+    const fontPx = rpxToPx(28 * fontScale);
+    const linePx = Math.max(18, fontPx * 1.7);
+    const contentHeight = Math.max(10, height - rpxToPx(40));
+    const contentWidth = Math.max(10, width - rpxToPx(40));
+    const approxChars = Math.max(12, Math.floor(contentWidth / Math.max(10, fontPx * 0.95)));
+    editorLineHeightPx.value = linePx;
+    editorVisibleLineCount.value = Math.max(1, Math.floor(contentHeight / linePx));
+    editorWrapCharCount.value = approxChars;
+  });
+}
+
+function estimateVisualLineIndex(content, cursorPosition) {
+  const text = String(content || "");
+  const safeCursor = Math.max(0, Math.min(text.length, Number(cursorPosition || 0)));
+  const before = text.slice(0, safeCursor);
+  const lines = before.split("\n");
+  const wrapChars = Math.max(12, Number(editorWrapCharCount.value || 22));
+  let visualLine = 0;
+  lines.forEach((line) => {
+    visualLine += Math.max(1, Math.ceil(line.length / wrapChars));
+  });
+  return Math.max(1, visualLine);
+}
+
+function syncEditorScrollToCursor(cursorPosition) {
+  const visualLine = estimateVisualLineIndex(logContent.value, cursorPosition);
+  const visibleLines = Math.max(1, Number(editorVisibleLineCount.value || 8));
+  const targetTopLine = Math.max(0, visualLine - visibleLines + 1);
+  const targetTop = Math.max(0, Math.round(targetTopLine * Math.max(18, Number(editorLineHeightPx.value || 26))));
+  if (Math.abs(Number(editorScrollTop.value || 0) - targetTop) < 2) {
+    editorScrollTop.value = Math.max(0, targetTop - 1);
+    nextTick(() => {
+      editorScrollTop.value = targetTop;
+    });
+    return;
+  }
+  editorScrollTop.value = targetTop;
+}
+
 function focusEditorAt(cursorPosition) {
+  const safeCursor = Math.max(0, Number(cursorPosition || 0));
+  syncEditorScrollToCursor(safeCursor);
+  editorRenderKey.value += 1;
   editorFocus.value = false;
+  editorCursor.value = -1;
+  editorSelectionStart.value = -1;
+  editorSelectionEnd.value = -1;
   nextTick(() => {
-    editorCursor.value = Number(cursorPosition);
+    editorCursor.value = safeCursor;
+    editorSelectionStart.value = safeCursor;
+    editorSelectionEnd.value = safeCursor;
     editorFocus.value = true;
+    syncEditorScrollToCursor(safeCursor);
+    nextTick(() => {
+      editorCursor.value = safeCursor;
+      editorSelectionStart.value = safeCursor;
+      editorSelectionEnd.value = safeCursor;
+      editorFocus.value = true;
+      syncEditorScrollToCursor(safeCursor);
+      setTimeout(() => {
+        editorCursor.value = safeCursor;
+        editorSelectionStart.value = safeCursor;
+        editorSelectionEnd.value = safeCursor;
+        editorFocus.value = true;
+        syncEditorScrollToCursor(safeCursor);
+      }, 32);
+      setTimeout(() => {
+        editorCursor.value = safeCursor;
+        editorSelectionStart.value = safeCursor;
+        editorSelectionEnd.value = safeCursor;
+        syncEditorScrollToCursor(safeCursor);
+      }, 120);
+    });
   });
 }
 
@@ -286,6 +402,7 @@ function findTaskTitle(taskId) {
 
 function syncEditorByDate() {
   logContent.value = dailyLogsTable.value.find((item) => item.dateKey === selectedDate.value)?.content || "";
+  editorScrollTop.value = 0;
 }
 
 function saveCurrentLog() {
@@ -315,11 +432,18 @@ watch(logContent, scheduleSave);
 
 onShow(() => {
   if (!ensureLogin()) return;
+  const sysInfo = uni.getSystemInfoSync ? uni.getSystemInfoSync() : {};
+  statusBarHeight.value = Math.max(0, Number(sysInfo?.statusBarHeight || 0));
+  windowWidthPx.value = Math.max(1, Number(sysInfo?.windowWidth || 375));
   themeVars.value = getThemeVars(getAppSettings());
   loadTodos();
   loadRecords();
   loadDailyLogs();
   syncEditorByDate();
+  nextTick(() => {
+    measureEditorViewport();
+    setTimeout(() => measureEditorViewport(), 80);
+  });
 });
 
 onUnload(() => {
@@ -331,10 +455,21 @@ onUnload(() => {
 
 <style scoped>
 .page {
-  min-height: 100vh;
-  padding: calc(24rpx + env(safe-area-inset-top)) 24rpx 40rpx;
+  height: 100vh;
+  padding: 18rpx 24rpx calc(env(safe-area-inset-bottom) + 22rpx);
   box-sizing: border-box;
   background: linear-gradient(165deg, var(--bg-start) 0%, var(--bg-end) 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.safe-top {
+  flex-shrink: 0;
+}
+
+.top-fixed {
+  flex-shrink: 0;
 }
 
 .hero,
@@ -388,10 +523,24 @@ onUnload(() => {
   border: 1rpx solid var(--border-soft);
 }
 
+.content-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 12rpx;
+}
+
+.content-inner {
+  padding-bottom: 12rpx;
+}
+
 .card {
-  margin-top: 18rpx;
+  margin-top: 14rpx;
   border-radius: 28rpx;
   padding: 22rpx;
+}
+
+.card:first-child {
+  margin-top: 0;
 }
 
 .section-head {
@@ -426,27 +575,30 @@ onUnload(() => {
   color: var(--text-sub);
 }
 
-.editor {
-  width: 100%;
+.editor-scroll {
   height: 38vh;
   margin-top: 16rpx;
-  padding: 20rpx;
-  box-sizing: border-box;
   border-radius: 24rpx;
   background: var(--panel-soft);
+}
+
+.editor {
+  width: 100%;
+  padding: 20rpx;
+  box-sizing: border-box;
+  background: transparent;
   color: var(--text-main);
   font-size: calc(28rpx * var(--font-scale));
   line-height: 1.7;
-  overflow-y: scroll;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.editor::-webkit-scrollbar {
+.editor-scroll::-webkit-scrollbar {
   width: 8rpx;
 }
 
-.editor::-webkit-scrollbar-thumb {
+.editor-scroll::-webkit-scrollbar-thumb {
   border-radius: 999rpx;
   background: rgba(92, 120, 145, 0.45);
 }

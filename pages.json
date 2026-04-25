@@ -36,22 +36,31 @@
     "selectedColor": "#2C76C9",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "black",
+    "fontSize": "13px",
     "list": [
       {
         "pagePath": "pages/timer/timer",
-        "text": "\u756a\u8304\u949f"
+        "text": "\u756a\u8304\u949f",
+        "iconPath": "/static/tabbar/timer-v2.png",
+        "selectedIconPath": "/static/tabbar/timer-active-v2.png"
       },
       {
         "pagePath": "pages/todo/todo",
-        "text": "\u5de5\u4f5c\u5f85\u529e"
+        "text": "\u5de5\u4f5c\u5f85\u529e",
+        "iconPath": "/static/tabbar/todo-v2.png",
+        "selectedIconPath": "/static/tabbar/todo-active-v2.png"
       },
       {
         "pagePath": "pages/log/log",
-        "text": "\u5de5\u4f5c\u65e5\u5fd7"
+        "text": "\u5de5\u4f5c\u65e5\u5fd7",
+        "iconPath": "/static/tabbar/log-v2.png",
+        "selectedIconPath": "/static/tabbar/log-active-v2.png"
       },
       {
         "pagePath": "pages/settings/settings",
-        "text": "\u6211\u7684"
+        "text": "\u6211\u7684",
+        "iconPath": "/static/tabbar/me-v2.png",
+        "selectedIconPath": "/static/tabbar/me-active-v2.png"
       }
     ]
   },

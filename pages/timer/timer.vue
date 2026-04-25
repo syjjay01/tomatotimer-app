@@ -1,15 +1,15 @@
 <template>
   <view class="page" :style="themeVars">
     <view class="hero-card">
-      <view class="hero-top">
-        <view class="status-switch" @tap="toggleMode">
+      <view class="status-banner" @tap="toggleMode">
+        <view class="status-main">
           <text class="eyebrow">当前状态</text>
           <view class="mode-row">
             <text class="mode">{{ currentMode.label }}</text>
             <text class="mode-emoji">{{ modeEmoji }}</text>
           </view>
         </view>
-        <view class="cycle-pill">第{{ cycleIndex }}个番茄</view>
+        <text class="cycle-badge">第{{ cycleIndex }}个番茄</text>
       </view>
 
       <view class="timer-ring" :style="ringStyle">
@@ -17,6 +17,11 @@
           <text class="timer-text">{{ formattedTime }}</text>
           <text v-if="timerSubText" class="timer-sub">{{ timerSubText }}</text>
         </view>
+      </view>
+
+      <view class="timer-copy">
+        <text class="copy-title">{{ statusPoem.title }}</text>
+        <text class="copy-desc">{{ statusPoem.desc }}</text>
       </view>
 
       <view class="action-row">
@@ -104,6 +109,17 @@ const selectedTaskName = computed(() => {
 });
 const timerSubText = computed(() => (currentModeKey.value === "focus" ? selectedTaskName.value : ""));
 const modeEmoji = computed(() => (currentModeKey.value === "focus" ? "🍅" : "☕"));
+const statusPoem = computed(() =>
+  currentModeKey.value === "focus"
+    ? {
+        title: "让心沉下来，光会自己亮起来。",
+        desc: "专注的每一分钟，都是你写给未来的答案。",
+      }
+    : {
+        title: "休息不是停下，是给灵感留白。",
+        desc: "慢慢呼吸，把节奏调回最舒服的状态。",
+      }
+);
 const countdownProgress = computed(() => {
   const total = Math.max(1, Number(sessionTotalSeconds.value || getModeDuration(currentModeKey.value)));
   return Math.max(0, Math.min(100, (remainingSeconds.value / total) * 100));
@@ -426,7 +442,7 @@ onUnload(() => {
   background: linear-gradient(165deg, var(--bg-start) 0%, var(--bg-end) 100%);
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 14rpx;
 }
 
 .hero-card,
@@ -439,14 +455,11 @@ onUnload(() => {
 
 .hero-card {
   border-radius: 36rpx;
-  padding: 26rpx;
-  flex: 1;
-  min-height: 860rpx;
+  padding: 24rpx 24rpx 26rpx;
   display: flex;
   flex-direction: column;
 }
 
-.hero-top,
 .section-head,
 .task-card {
   display: flex;
@@ -454,10 +467,19 @@ onUnload(() => {
   align-items: flex-start;
 }
 
-.status-switch {
-  padding: 8rpx 12rpx;
-  border-radius: 20rpx;
-  background: var(--accent-soft);
+.status-banner {
+  position: relative;
+  width: 100%;
+  padding: 20rpx 22rpx;
+  border-radius: 26rpx;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(255, 255, 255, 0.96) 100%);
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+}
+
+.status-main {
+  min-height: 96rpx;
+  padding-right: 200rpx;
 }
 
 .eyebrow {
@@ -468,8 +490,7 @@ onUnload(() => {
 
 .mode {
   display: inline-block;
-  margin-top: 8rpx;
-  font-size: calc(46rpx * var(--font-scale));
+  font-size: calc(48rpx * var(--font-scale));
   font-weight: 800;
   color: var(--text-main);
 }
@@ -477,25 +498,31 @@ onUnload(() => {
 .mode-row {
   display: flex;
   align-items: baseline;
+  margin-top: 10rpx;
   gap: 8rpx;
 }
 
 .mode-emoji {
-  font-size: calc(32rpx * var(--font-scale));
-  opacity: 0.85;
+  font-size: calc(34rpx * var(--font-scale));
+  opacity: 0.78;
 }
 
-.cycle-pill {
-  background: var(--accent-soft);
-  color: var(--accent-deep);
+.cycle-badge {
+  position: absolute;
+  right: 20rpx;
+  top: 18rpx;
+  padding: 10rpx 16rpx;
   border-radius: 999rpx;
-  padding: 12rpx 18rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(255, 255, 255, 0.92);
+  color: var(--accent-deep);
   font-size: calc(22rpx * var(--font-scale));
+  font-weight: 700;
 }
 
 .timer-ring {
   --ring-progress: 0deg;
-  margin: 28rpx auto 0;
+  margin: 58rpx auto 0;
   width: 520rpx;
   height: 520rpx;
   border-radius: 50%;
@@ -530,9 +557,28 @@ onUnload(() => {
   color: var(--text-sub);
 }
 
+.timer-copy {
+  margin-top: 28rpx;
+  text-align: center;
+}
+
+.copy-title {
+  display: block;
+  font-size: calc(28rpx * var(--font-scale));
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.copy-desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: calc(22rpx * var(--font-scale));
+  line-height: 1.6;
+  color: var(--text-sub);
+}
+
 .action-row {
-  margin-top: auto;
-  padding-top: 30rpx;
+  margin-top: 30rpx;
   display: flex;
   gap: 18rpx;
 }

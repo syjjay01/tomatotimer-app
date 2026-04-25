@@ -4,8 +4,11 @@
     <view class="ambient ambient-b"></view>
 
     <view class="hero">
-      <text class="brand">番工宝</text>
-      <text class="headline">把专注、待办和工作痕迹放进同一个节奏里。</text>
+      <view class="brand-row">
+        <text class="brand">番工宝</text>
+        <image class="brand-logo" src="/static/tabbar/timer-active-v2.png" mode="aspectFit" />
+      </view>
+      <text class="headline">把专注、待办和工作痕迹放进同一节奏里</text>
       <text class="subline">先登录，再开始今天的番茄钟。</text>
     </view>
 
@@ -151,12 +154,27 @@ onShow(() => {
   padding-top: 36rpx;
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
 .brand {
-  display: block;
-  font-size: calc(76rpx * var(--font-scale));
-  line-height: 1;
-  font-weight: 800;
+  display: inline-block;
+  font-size: calc(72rpx * var(--font-scale));
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   color: var(--text-main);
+  text-shadow: 0 3rpx 10rpx rgba(18, 49, 77, 0.06);
+}
+
+.brand-logo {
+  width: 74rpx;
+  height: 74rpx;
+  opacity: 0.86;
 }
 
 .headline {

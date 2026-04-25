@@ -1,79 +1,92 @@
 <template>
   <view class="page" :style="themeVars">
-    <view class="hero">
-      <view>
-        <text class="eyebrow">工作待办</text>
-        <text class="headline">把今天最重要的事情排在最前面。</text>
+    <view class="safe-top" :style="{ height: `${statusBarHeight}px` }"></view>
+    <view class="top-fixed">
+      <view class="hero">
+        <view>
+          <text class="eyebrow">工作待办</text>
+          <text class="headline">把最重要的事情排在最前面</text>
+        </view>
+        <button class="add-btn" @tap="openCreateEditor">新增任务</button>
       </view>
-      <button class="add-btn" @tap="openCreateEditor">新增任务</button>
+
+      <view class="completed-banner" @tap="jumpToCompleted">
+        <text class="completed-label">已完成 {{ completedCount }} 项</text>
+        <text class="completed-link">{{ completedCount > 0 ? "查看区域" : "暂无完成" }}</text>
+      </view>
     </view>
 
-    <view class="section-card">
-      <view class="section-head">
-        <text class="section-title">未完成</text>
-        <text class="section-meta">{{ unfinishedTodos.length }} 项</text>
-      </view>
-      <text v-if="unfinishedTodos.length > 0" class="sort-tip">长按任务可拖拽排序</text>
-      <view
-        v-if="unfinishedTodos.length > 0"
-        class="unfinished-list"
-        @touchmove="onDragMove"
-        @touchend="endDrag"
-        @touchcancel="endDrag"
-      >
-        <view
-          v-for="(todo, index) in unfinishedTodos"
-          :key="todo.id"
-          class="task-row unfinished-item"
-          :class="{ dragging: dragActive && draggingTodoId === todo.id }"
-          @longpress="startDrag(todo.id, index, $event)"
-        >
-          <view class="check" :class="{ checked: todo.completed }" @tap="toggleCompleted(todo.id)"></view>
-          <view class="task-body">
-            <view class="title-row">
-              <text class="task-title">{{ todo.title }}</text>
-              <text class="priority" :class="`priority-${todo.priority}`">{{ priorityLabel(todo.priority) }}</text>
+    <scroll-view class="content-scroll" scroll-y :scroll-into-view="todoScrollIntoView" scroll-with-animation>
+      <view class="content-inner">
+        <view class="section-card">
+          <view class="section-head">
+            <text class="section-title">未完成</text>
+            <text class="section-meta">{{ unfinishedTodos.length }} 项</text>
+          </view>
+          <text v-if="unfinishedTodos.length > 0" class="sort-tip">长按任务可拖拽排序</text>
+
+          <view
+            v-if="unfinishedTodos.length > 0"
+            class="unfinished-list"
+            @touchmove="onDragMove"
+            @touchend="endDrag"
+            @touchcancel="endDrag"
+          >
+            <view
+              v-for="(todo, index) in unfinishedTodos"
+              :key="todo.id"
+              class="task-row unfinished-item"
+              :class="{ dragging: dragActive && draggingTodoId === todo.id }"
+              @longpress="startDrag(todo.id, index)"
+            >
+              <view class="check" :class="{ checked: todo.completed }" @tap="toggleCompleted(todo.id)"></view>
+              <view class="task-body">
+                <view class="title-row">
+                  <text class="task-title">{{ todo.title }}</text>
+                  <text class="priority" :class="`priority-${todo.priority}`">{{ priorityLabel(todo.priority) }}</text>
+                </view>
+                <text v-if="todo.description" class="task-desc">{{ todo.description }}</text>
+                <view class="meta-row">
+                  <text class="focus-count">已专注 {{ readTaskPomodoroCount(todo) }} 个番茄</text>
+                  <view class="row-actions">
+                    <button class="icon-btn" @tap.stop="openEditEditor(todo)">✏️</button>
+                    <button class="icon-btn danger" @tap.stop="confirmDelete(todo.id)">🗑</button>
+                  </view>
+                </view>
+              </view>
             </view>
-            <text v-if="todo.description" class="task-desc">{{ todo.description }}</text>
-            <view class="meta-row">
-              <text class="focus-count">已专注 {{ readTaskPomodoroCount(todo) }} 个番茄</text>
-              <view class="row-actions">
-                <button class="icon-btn" @tap.stop="openEditEditor(todo)">✏️</button>
-                <button class="icon-btn danger" @tap.stop="confirmDelete(todo.id)">🗑</button>
+          </view>
+          <view v-else class="empty">还没有任务，先加一条开始吧。</view>
+        </view>
+
+        <view id="completed-anchor" class="section-card muted">
+          <view class="section-head" @tap="completedCollapsed = !completedCollapsed">
+            <text class="section-title">已完成</text>
+            <text class="section-meta">{{ completedCollapsed ? "展开" : "收起" }}</text>
+          </view>
+          <view v-if="!completedCollapsed">
+            <view v-if="completedTodos.length === 0" class="empty">还没有已完成任务。</view>
+            <view v-for="todo in completedTodos" :key="todo.id" class="task-row done">
+              <view class="check checked" @tap="toggleCompleted(todo.id)"></view>
+              <view class="task-body">
+                <view class="title-row">
+                  <text class="task-title done-text">{{ todo.title }}</text>
+                  <text class="priority" :class="`priority-${todo.priority}`">{{ priorityLabel(todo.priority) }}</text>
+                </view>
+                <text v-if="todo.description" class="task-desc done-text">{{ todo.description }}</text>
+                <view class="meta-row">
+                  <text class="focus-count">已专注 {{ readTaskPomodoroCount(todo) }} 个番茄</text>
+                  <view class="row-actions">
+                    <button class="icon-btn" @tap.stop="openEditEditor(todo)">✏️</button>
+                    <button class="icon-btn danger" @tap.stop="confirmDelete(todo.id)">🗑</button>
+                  </view>
+                </view>
               </view>
             </view>
           </view>
         </view>
       </view>
-      <view v-else class="empty">今天还没有任务，先加一条开始吧。</view>
-    </view>
-
-    <view class="section-card muted">
-      <view class="section-head" @tap="completedCollapsed = !completedCollapsed">
-        <text class="section-title">已完成</text>
-        <text class="section-meta">{{ completedCollapsed ? "展开" : "收起" }}</text>
-      </view>
-      <view v-if="!completedCollapsed">
-        <view v-if="completedTodos.length === 0" class="empty">还没有已完成任务。</view>
-        <view v-for="todo in completedTodos" :key="todo.id" class="task-row done">
-          <view class="check checked" @tap="toggleCompleted(todo.id)"></view>
-          <view class="task-body">
-            <view class="title-row">
-              <text class="task-title done-text">{{ todo.title }}</text>
-              <text class="priority" :class="`priority-${todo.priority}`">{{ priorityLabel(todo.priority) }}</text>
-            </view>
-            <text v-if="todo.description" class="task-desc done-text">{{ todo.description }}</text>
-            <view class="meta-row">
-              <text class="focus-count">已专注 {{ readTaskPomodoroCount(todo) }} 个番茄</text>
-              <view class="row-actions">
-                <button class="icon-btn" @tap.stop="openEditEditor(todo)">✏️</button>
-                <button class="icon-btn danger" @tap.stop="confirmDelete(todo.id)">🗑</button>
-              </view>
-            </view>
-          </view>
-        </view>
-      </view>
-    </view>
+    </scroll-view>
 
     <view v-if="showEditor" class="sheet-mask" @tap="closeEditor">
       <view class="sheet-panel" @tap.stop>
@@ -121,6 +134,8 @@ const editingId = ref("");
 const titleInputFocus = ref(false);
 const form = ref({ title: "", description: "", priority: "medium" });
 const themeVars = ref(getThemeVars(getAppSettings()));
+const todoScrollIntoView = ref("");
+const statusBarHeight = ref(0);
 
 const dragActive = ref(false);
 const draggingTodoId = ref("");
@@ -136,6 +151,7 @@ const unfinishedTodos = computed(() => {
   return moveByIndex(base, dragFromIndex.value, dragToIndex.value);
 });
 const completedTodos = computed(() => [...todos.value].filter((item) => item.completed).sort((a, b) => Number(b.completedAt || 0) - Number(a.completedAt || 0)));
+const completedCount = computed(() => completedTodos.value.length);
 
 function priorityLabel(priority) {
   if (priority === "high") return "高";
@@ -211,11 +227,20 @@ function getNextUnfinishedOrder() {
   return maxOrder + 1;
 }
 
+function jumpToCompleted() {
+  if (completedCount.value <= 0) return;
+  completedCollapsed.value = false;
+  todoScrollIntoView.value = "completed-anchor";
+  setTimeout(() => {
+    todoScrollIntoView.value = "";
+  }, 120);
+}
+
 function openCreateEditor() {
   editingId.value = "";
   form.value = { title: "", description: "", priority: "medium" };
+  titleInputFocus.value = false;
   showEditor.value = true;
-  focusTitleInput();
 }
 
 function openEditEditor(todo) {
@@ -400,6 +425,8 @@ function moveByIndex(list, from, to) {
 
 onShow(() => {
   if (!ensureLogin()) return;
+  const sysInfo = uni.getSystemInfoSync ? uni.getSystemInfoSync() : {};
+  statusBarHeight.value = Math.max(0, Number(sysInfo?.statusBarHeight || 0));
   themeVars.value = getThemeVars(getAppSettings());
   loadTodos();
 });
@@ -407,15 +434,27 @@ onShow(() => {
 
 <style scoped>
 .page {
-  min-height: 100vh;
-  padding: calc(24rpx + env(safe-area-inset-top)) 24rpx 40rpx;
+  height: 100vh;
+  padding: 18rpx 24rpx calc(env(safe-area-inset-bottom) + 22rpx);
   box-sizing: border-box;
   background: linear-gradient(165deg, var(--bg-start) 0%, var(--bg-end) 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.safe-top {
+  flex-shrink: 0;
+}
+
+.top-fixed {
+  flex-shrink: 0;
 }
 
 .hero,
 .section-card,
-.sheet-panel {
+.sheet-panel,
+.completed-banner {
   background: var(--panel);
   box-shadow: 0 18rpx 44rpx rgba(22, 41, 31, 0.08);
 }
@@ -461,10 +500,44 @@ onShow(() => {
   border: none;
 }
 
+.completed-banner {
+  margin-top: 12rpx;
+  border-radius: 20rpx;
+  padding: 14rpx 18rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.completed-label {
+  font-size: calc(22rpx * var(--font-scale));
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.completed-link {
+  font-size: calc(20rpx * var(--font-scale));
+  color: var(--accent-deep);
+}
+
+.content-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 12rpx;
+}
+
+.content-inner {
+  padding-bottom: 12rpx;
+}
+
 .section-card {
-  margin-top: 18rpx;
+  margin-top: 14rpx;
   border-radius: 28rpx;
   padding: 20rpx;
+}
+
+.section-card:first-child {
+  margin-top: 0;
 }
 
 .section-card.muted {

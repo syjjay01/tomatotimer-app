@@ -76,6 +76,8 @@
         </text>
       </view>
     </view>
+
+    <text class="version-text">V1.0.0</text>
   </view>
 </template>
 
@@ -452,5 +454,13 @@ onShow(() => {
 .font-pill.active {
   background: var(--accent-soft);
   color: var(--accent-deep);
+}
+
+.version-text {
+  display: block;
+  margin: 22rpx 0 6rpx;
+  text-align: center;
+  font-size: calc(22rpx * var(--font-scale));
+  color: var(--text-sub);
 }
 </style>
